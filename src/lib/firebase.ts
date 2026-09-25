@@ -71,6 +71,9 @@ export function getAuthErrorMessage(error: any): string {
       return 'Only one sign-in window can be open at a time.';
     case 'auth/network-request-failed':
       return 'Network connection failed. Please check your internet connection.';
+    case 'auth/configuration-not-found':
+    case 'auth/operation-not-allowed':
+      return 'Authentication sign-in method is not enabled yet in your Firebase Console. Go to Firebase Console > Build > Authentication > Sign-in method and enable Email/Password & Google.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Access is temporarily restricted. Please try again shortly.';
     default:
