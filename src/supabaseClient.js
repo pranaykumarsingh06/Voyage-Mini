@@ -61,50 +61,70 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'dummy-key'
 
 /**
  * Helper to sync Firebase user details to Supabase 'profiles' table upon login.
+ * Uses atomic upsert linked by Firebase UID.
  */
 export async function syncUserProfile(firebaseUser) {
-  if (!isSupabaseConfigured || !firebaseUser) return null;
+  if (!isSupabaseConfigured || !firebaseUser || !firebaseUser.uid) {
+    return null;
+  }
 
-  const profileData = {
+  const profilePayload = {
     firebase_uid: firebaseUser.uid,
     email: firebaseUser.email,
-    full_name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Traveler',
+    full_name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Traveler'),
     avatar_url: firebaseUser.photoURL || null,
-    role: 'traveler',
     updated_at: new Date().toISOString()
   };
 
   try {
-    // Try matching by firebase_uid
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('firebase_uid', firebaseUser.uid)
-      .maybeSingle();
+    // Strategy 1: Stored Procedure sync_user_profile (SECURITY DEFINER)
+    const { data: rpcProfile, error: rpcError } = await supabase.rpc('sync_user_profile', {
+      p_firebase_uid: profilePayload.firebase_uid,
+      p_email: profilePayload.email || '',
+      p_full_name: profilePayload.full_name,
+      p_avatar_url: profilePayload.avatar_url
+    });
 
-    if (existing) {
-      return existing;
+    if (!rpcError && rpcProfile) {
+      console.log('[SupabaseClient] Profile synchronized via RPC:', rpcProfile.email);
+      return rpcProfile;
     }
 
-    const { data, error } = await supabase
+    if (rpcError) {
+      console.warn('[SupabaseClient] RPC sync notice:', rpcError.message);
+    }
+
+    // Strategy 2: Direct Supabase client Upsert (ON CONFLICT firebase_uid)
+    const { data: upsertedProfile, error: upsertError } = await supabase
       .from('profiles')
-      .insert(profileData)
+      .upsert(
+        {
+          ...profilePayload,
+          role: 'traveler'
+        },
+        { onConflict: 'firebase_uid' }
+      )
       .select()
       .single();
 
-    if (error) {
-      console.warn('[SupabaseClient] Notice on profile sync:', error.message);
-      return {
-        id: 'local-' + firebaseUser.uid,
-        ...profileData,
-        created_at: new Date().toISOString(),
-      };
+    if (!upsertError && upsertedProfile) {
+      console.log('[SupabaseClient] Profile upserted successfully in database:', upsertedProfile.email);
+      return upsertedProfile;
     }
 
-    return data;
+    const failureReason = upsertError?.message || rpcError?.message || 'Database sync failed';
+    console.error('[SupabaseClient] Profile synchronization failed:', failureReason);
+
+    if (failureReason.includes('row-level security') || failureReason.includes('42501')) {
+      throw new Error(
+        `Database profile sync restricted by Row Level Security policy. Please execute migration '20260926000001_sync_profiles_rls.sql' in Supabase SQL editor.`
+      );
+    }
+
+    throw new Error(`Database profile sync failed: ${failureReason}`);
   } catch (err) {
     console.error('[SupabaseClient] Error in syncUserProfile:', err);
-    return null;
+    throw err;
   }
 }
 

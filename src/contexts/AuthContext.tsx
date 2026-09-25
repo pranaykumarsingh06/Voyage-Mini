@@ -78,8 +78,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: cred.user.photoURL,
           });
           if (synced) setProfile(synced);
-        } catch (e) {
-          console.warn('[Auth] Sync after sign in:', e);
+        } catch (e: any) {
+          console.error('[Auth] Sync after sign in failed:', e);
+          setProfile({
+            id: 'local-' + cred.user.uid,
+            firebase_uid: cred.user.uid,
+            email: cred.user.email,
+            full_name: cred.user.displayName || (cred.user.email ? cred.user.email.split('@')[0] : 'Traveler'),
+            avatar_url: cred.user.photoURL || null,
+            role: 'traveler',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          throw e;
         }
       }
       return cred;
@@ -113,8 +124,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: cred.user.photoURL,
           });
           if (synced) setProfile(synced);
-        } catch (e) {
-          console.warn('[Auth] Sync after sign up:', e);
+        } catch (e: any) {
+          console.error('[Auth] Sync after sign up failed:', e);
+          setProfile({
+            id: 'local-' + cred.user.uid,
+            firebase_uid: cred.user.uid,
+            email: cred.user.email,
+            full_name: name || (cred.user.email ? cred.user.email.split('@')[0] : 'Traveler'),
+            avatar_url: cred.user.photoURL || null,
+            role: 'traveler',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          throw e;
         }
       }
       return cred;
@@ -147,8 +169,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: cred.user.photoURL,
           });
           if (synced) setProfile(synced);
-        } catch (e) {
-          console.warn('[Auth] Sync after Google login:', e);
+        } catch (e: any) {
+          console.error('[Auth] Sync after Google login failed:', e);
+          setProfile({
+            id: 'local-' + cred.user.uid,
+            firebase_uid: cred.user.uid,
+            email: cred.user.email,
+            full_name: cred.user.displayName || 'Explorer Google',
+            avatar_url: cred.user.photoURL || null,
+            role: 'traveler',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          throw e;
         }
       }
       return cred;

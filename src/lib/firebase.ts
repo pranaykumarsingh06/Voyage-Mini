@@ -50,6 +50,10 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
  */
 export function getAuthErrorMessage(error: any): string {
   if (!error) return 'An unexpected error occurred.';
+  if (typeof error === 'string') return error;
+  if (error.message && (error.message.includes('Database profile sync') || error.message.includes('Row Level Security'))) {
+    return error.message;
+  }
   const code = error.code || '';
   switch (code) {
     case 'auth/email-already-in-use':
