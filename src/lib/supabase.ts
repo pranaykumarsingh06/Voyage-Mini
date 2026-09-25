@@ -53,7 +53,7 @@ export async function syncUserProfile(firebaseUser: { uid: string; email: string
 
   try {
     // Check if profile exists
-    const { data: existing, error: fetchErr } = await supabase
+    const { data: existing } = await supabase
       .from('profiles')
       .select('*')
       .eq('firebase_uid', firebaseUser.uid)
