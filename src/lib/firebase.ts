@@ -18,8 +18,8 @@ const firebaseConfig = {
   authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'final-voyage.firebaseapp.com',
   projectId: env.VITE_FIREBASE_PROJECT_ID || 'final-voyage',
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'final-voyage.firebasestorage.app',
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: env.VITE_FIREBASE_APP_ID || ''
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '485893142380',
+  appId: env.VITE_FIREBASE_APP_ID || '1:485893142380:web:11ef7213752f4c7608e549'
 };
 
 export const isFirebaseConfigured = Boolean(
