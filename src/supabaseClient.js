@@ -76,13 +76,23 @@ export async function syncUserProfile(firebaseUser) {
     updated_at: new Date().toISOString()
   };
 
-  try {
+    // Obtain fresh Firebase ID Token for cryptographic identity verification in PostgreSQL
+    let idToken = null;
+    if (auth && auth.currentUser) {
+      try {
+        idToken = await auth.currentUser.getIdToken();
+      } catch (tokenErr) {
+        console.warn('[SupabaseClient] Could not fetch fresh ID token for sync:', tokenErr);
+      }
+    }
+
     // Strategy 1: Stored Procedure sync_user_profile (SECURITY DEFINER)
     const { data: rpcProfile, error: rpcError } = await supabase.rpc('sync_user_profile', {
       p_firebase_uid: profilePayload.firebase_uid,
       p_email: profilePayload.email || '',
       p_full_name: profilePayload.full_name,
-      p_avatar_url: profilePayload.avatar_url
+      p_avatar_url: profilePayload.avatar_url,
+      p_token: idToken || undefined
     });
 
     if (!rpcError && rpcProfile) {

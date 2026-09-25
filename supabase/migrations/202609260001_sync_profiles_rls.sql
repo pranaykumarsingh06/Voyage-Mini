@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Migration: 20260926000001_sync_profiles_rls.sql
+-- Migration: 202609260001_sync_profiles_rls.sql
 -- Description: Hardened Firebase-to-Supabase Profile Synchronization & Secure RLS
 -- Target: Row Level Security, Token Verification, Atomic Profile Upsert
 -- ==============================================================================
