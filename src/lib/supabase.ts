@@ -28,12 +28,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'dummy-anon
     fetch: async (url, options = {}) => {
       const headers = new Headers(options.headers || {});
       
-      // Inject Firebase ID token if user is signed in
+      // Ensure Supabase API key and Authorization header remain valid for PostgREST
+      if (!headers.has('apikey') && supabaseAnonKey) {
+        headers.set('apikey', supabaseAnonKey);
+      }
+      if (!headers.has('Authorization') && supabaseAnonKey) {
+        headers.set('Authorization', `Bearer ${supabaseAnonKey}`);
+      }
+
+      // Attach Firebase User ID and Token via custom headers
       if (auth && auth.currentUser) {
+        headers.set('X-Firebase-UID', auth.currentUser.uid);
         try {
           const token = await auth.currentUser.getIdToken();
           if (token) {
-            headers.set('Authorization', `Bearer ${token}`);
+            headers.set('X-Firebase-Token', token);
           }
         } catch (err) {
           console.warn('[Supabase] Could not retrieve fresh Firebase token:', err);

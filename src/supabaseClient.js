@@ -33,12 +33,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'dummy-key'
     fetch: async (url, options = {}) => {
       const headers = new Headers(options.headers || {});
       
-      // If Firebase Auth has a logged-in user, fetch fresh ID token and pass to Supabase
+      // Ensure Supabase API key and Authorization header remain valid for PostgREST
+      if (!headers.has('apikey') && supabaseAnonKey) {
+        headers.set('apikey', supabaseAnonKey);
+      }
+      if (!headers.has('Authorization') && supabaseAnonKey) {
+        headers.set('Authorization', `Bearer ${supabaseAnonKey}`);
+      }
+
+      // If Firebase Auth has a logged-in user, attach Firebase UID and token
       if (auth && auth.currentUser) {
+        headers.set('X-Firebase-UID', auth.currentUser.uid);
         try {
           const token = await auth.currentUser.getIdToken();
           if (token) {
-            headers.set('Authorization', `Bearer ${token}`);
+            headers.set('X-Firebase-Token', token);
           }
         } catch (err) {
           console.warn('[SupabaseClient] Could not fetch Firebase ID token:', err);
