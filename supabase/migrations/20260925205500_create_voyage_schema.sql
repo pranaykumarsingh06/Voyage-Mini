@@ -2,16 +2,16 @@
 -- Description: Create initial schema for VOYAGE travel application with Firebase Auth integration & RLS
 
 -- 1. Helper function to extract current authenticated user ID (supporting Firebase Auth and Supabase Auth)
-CREATE OR REPLACE FUNCTION auth.current_uid()
+CREATE OR REPLACE FUNCTION public.current_uid()
 RETURNS TEXT AS $$
   SELECT COALESCE(
     auth.jwt() ->> 'sub',
     auth.jwt() ->> 'user_id',
     (auth.uid())::text,
-    current_setting('request.jwt.claim.sub', true),
-    current_setting('request.jwt.claim.user_id', true)
+    NULLIF(current_setting('request.jwt.claim.sub', true), ''),
+    NULLIF(current_setting('request.jwt.claim.user_id', true), '')
   );
-$$ LANGUAGE sql STABLE;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- 2. Profiles Table (Keyed by Firebase UID / Auth ID string)
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -164,12 +164,12 @@ CREATE POLICY "Public profiles are viewable by everyone"
 
 CREATE POLICY "Users can insert their own profile"
   ON public.profiles FOR INSERT
-  WITH CHECK (auth.current_uid() = id);
+  WITH CHECK (public.current_uid() = id);
 
 CREATE POLICY "Users can update their own profile"
   ON public.profiles FOR UPDATE
-  USING (auth.current_uid() = id)
-  WITH CHECK (auth.current_uid() = id);
+  USING (public.current_uid() = id)
+  WITH CHECK (public.current_uid() = id);
 
 -- 2. Destinations Policies (Public read, admin write)
 CREATE POLICY "Destinations are viewable by everyone"
@@ -184,20 +184,16 @@ CREATE POLICY "Travel packages are viewable by everyone"
 -- 4. Trips Policies (Owner only)
 CREATE POLICY "Users can view their own trips"
   ON public.trips FOR SELECT
-  USING (auth.current_uid() = user_id);
+  USING (public.current_uid() = user_id);
 
 CREATE POLICY "Users can insert their own trips"
   ON public.trips FOR INSERT
-  WITH CHECK (auth.current_uid() = user_id);
+  WITH CHECK (public.current_uid() = user_id);
 
 CREATE POLICY "Users can update their own trips"
   ON public.trips FOR UPDATE
-  USING (auth.current_uid() = user_id)
-  WITH CHECK (auth.current_uid() = user_id);
-
-CREATE POLICY "Users can delete their own trips"
-  ON public.trips FOR DELETE
-  USING (auth.current_uid() = user_id);
+  USING (public.current_uid() = user_id)
+  WITH CHECK (public.current_uid() = user_id);
 
 -- 5. Itinerary Items Policies (Owner of the trip only)
 CREATE POLICY "Users can view itinerary items of their trips"
@@ -206,7 +202,7 @@ CREATE POLICY "Users can view itinerary items of their trips"
     EXISTS (
       SELECT 1 FROM public.trips
       WHERE trips.id = itinerary_items.trip_id
-      AND trips.user_id = auth.current_uid()
+      AND trips.user_id = public.current_uid()
     )
   );
 
@@ -216,7 +212,7 @@ CREATE POLICY "Users can insert itinerary items to their trips"
     EXISTS (
       SELECT 1 FROM public.trips
       WHERE trips.id = itinerary_items.trip_id
-      AND trips.user_id = auth.current_uid()
+      AND trips.user_id = public.current_uid()
     )
   );
 
@@ -226,14 +222,14 @@ CREATE POLICY "Users can update itinerary items of their trips"
     EXISTS (
       SELECT 1 FROM public.trips
       WHERE trips.id = itinerary_items.trip_id
-      AND trips.user_id = auth.current_uid()
+      AND trips.user_id = public.current_uid()
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.trips
       WHERE trips.id = itinerary_items.trip_id
-      AND trips.user_id = auth.current_uid()
+      AND trips.user_id = public.current_uid()
     )
   );
 
@@ -243,36 +239,36 @@ CREATE POLICY "Users can delete itinerary items of their trips"
     EXISTS (
       SELECT 1 FROM public.trips
       WHERE trips.id = itinerary_items.trip_id
-      AND trips.user_id = auth.current_uid()
+      AND trips.user_id = public.current_uid()
     )
   );
 
 -- 6. Favorites Policies (Owner only)
 CREATE POLICY "Users can view their own favorites"
   ON public.favorites FOR SELECT
-  USING (auth.current_uid() = user_id);
+  USING (public.current_uid() = user_id);
 
 CREATE POLICY "Users can add their own favorites"
   ON public.favorites FOR INSERT
-  WITH CHECK (auth.current_uid() = user_id);
+  WITH CHECK (public.current_uid() = user_id);
 
 CREATE POLICY "Users can delete their own favorites"
   ON public.favorites FOR DELETE
-  USING (auth.current_uid() = user_id);
+  USING (public.current_uid() = user_id);
 
 -- 7. Bookings Policies (Owner only)
 CREATE POLICY "Users can view their own bookings"
   ON public.bookings FOR SELECT
-  USING (auth.current_uid() = user_id);
+  USING (public.current_uid() = user_id);
 
 CREATE POLICY "Users can create their own bookings"
   ON public.bookings FOR INSERT
-  WITH CHECK (auth.current_uid() = user_id);
+  WITH CHECK (public.current_uid() = user_id);
 
 CREATE POLICY "Users can update their own bookings"
   ON public.bookings FOR UPDATE
-  USING (auth.current_uid() = user_id)
-  WITH CHECK (auth.current_uid() = user_id);
+  USING (public.current_uid() = user_id)
+  WITH CHECK (public.current_uid() = user_id);
 
 -- Seed Initial Destination & Package Data for VOYAGE
 INSERT INTO public.destinations (name, slug, country, city, continent, description, short_description, image_url, rating, reviews_count, price_level, best_time_to_visit, weather_summary, popular_tags, is_featured)

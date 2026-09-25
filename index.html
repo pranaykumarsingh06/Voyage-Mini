@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VOYAGE — Luxury Travel & Curated Journeys</title>
+    <meta
+      name="description"
+      content="Discover extraordinary destinations, curated travel packages, and bespoke itineraries crafted for unforgettable journeys."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+      <div class="nav-container">
+        <a href="#" class="brand-logo" id="brand-logo">
+          <span class="logo-icon">✦</span>
+          <span class="logo-text">VOYAGE</span>
+        </a>
+
+        <nav class="nav-links">
+          <a href="#destinations" class="nav-link active">Destinations</a>
+          <a href="#packages" class="nav-link">Packages</a>
+          <a href="#planner" class="nav-link">Trip Planner</a>
+          <a href="#my-trips" class="nav-link">My Trips</a>
+          <a href="#saved" class="nav-link">Favorites (<span id="fav-count">0</span>)</a>
+        </nav>
+
+        <div class="nav-actions">
+          <div class="db-status-badge" id="db-status-badge" title="Database Status">
+            <span class="status-dot"></span>
+            <span class="status-label">Supabase Connected</span>
+          </div>
+
+          <div id="auth-container">
+            <button class="btn btn-outline" id="btn-open-auth">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <div class="hero-tag">
+          <span>Explore Extraordinary Horizons</span>
+        </div>
+        <h1 class="hero-title">
+          Bespoke Journeys Across <span class="gradient-text">The World</span>
+        </h1>
+        <p class="hero-subtitle">
+          Unrivaled travel itineraries, handpicked sanctuaries, and private expeditions designed for discerning travelers.
+        </p>
+
+        <!-- Search & Filter Bar -->
+        <div class="search-bar-card">
+          <div class="search-field">
+            <label for="search-input">Where to?</label>
+            <div class="input-with-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="search-input" placeholder="Search Kyoto, Positano, Santorini..." />
+            </div>
+          </div>
+
+          <div class="search-field">
+            <label for="continent-select">Continent</label>
+            <select id="continent-select">
+              <option value="all">All Continents</option>
+              <option value="Asia">Asia</option>
+              <option value="Europe">Europe</option>
+              <option value="North America">North America</option>
+              <option value="South America">South America</option>
+              <option value="Africa">Africa</option>
+              <option value="Oceania">Oceania</option>
+            </select>
+          </div>
+
+          <div class="search-field">
+            <label for="travel-type-select">Experience</label>
+            <select id="travel-type-select">
+              <option value="all">Any Style</option>
+              <option value="Cultural">Cultural & Heritage</option>
+              <option value="Coastal">Coastal & Yachting</option>
+              <option value="Nature">Alpine & Nature</option>
+              <option value="Romantic">Romantic Escapes</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary btn-search" id="btn-search-trigger">
+            <span>Discover</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Schema Notification Banner (if tables need migration) -->
+    <div id="migration-banner" class="migration-alert" style="display: none;">
+      <div class="migration-alert-content">
+        <span class="alert-icon">⚡</span>
+        <div>
+          <strong>Database Schema Pending:</strong> Connect to Supabase is active! Please execute the SQL in 
+          <code>supabase/migrations/20260925205500_create_voyage_schema.sql</code> in your Supabase SQL editor to enable remote persistence.
+        </div>
+      </div>
+      <button class="btn btn-sm btn-ghost" id="btn-copy-migration">Copy SQL</button>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="main-container">
+      
+      <!-- Featured Destinations Section -->
+      <section id="destinations" class="section-block">
+        <div class="section-header">
+          <div>
+            <span class="section-tag">Handcrafted Portfolios</span>
+            <h2 class="section-title">Iconic Destinations</h2>
+          </div>
+          <div class="filter-pills" id="continent-pills">
+            <button class="pill-btn active" data-filter="all">All</button>
+            <button class="pill-btn" data-filter="Asia">Asia</button>
+            <button class="pill-btn" data-filter="Europe">Europe</button>
+            <button class="pill-btn" data-filter="North America">North America</button>
+          </div>
+        </div>
+
+        <div class="destinations-grid" id="destinations-grid">
+          <div class="loader-skeleton">Loading curated destinations...</div>
+        </div>
+      </section>
+
+      <!-- Signature Travel Packages Section -->
+      <section id="packages" class="section-block">
+        <div class="section-header">
+          <div>
+            <span class="section-tag">All-Inclusive Luxury</span>
+            <h2 class="section-title">Curated Expeditions</h2>
+          </div>
+          <p class="section-desc">Each journey features hand-selected 5-star accommodations, private guides, and exclusive experiences.</p>
+        </div>
+
+        <div class="packages-grid" id="packages-grid">
+          <div class="loader-skeleton">Loading packages...</div>
+        </div>
+      </section>
+
+      <!-- Interactive Trip Planner & Itinerary Builder -->
+      <section id="planner" class="section-block planner-section">
+        <div class="planner-card">
+          <div class="planner-header">
+            <div>
+              <span class="section-tag">Bespoke Itinerary Studio</span>
+              <h2 class="section-title">Plan Your Voyage</h2>
+              <p class="section-desc">Design a customized multi-day journey with curated daily excursions and budget tracking.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-new-trip-modal">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Create New Trip
+            </button>
+          </div>
+
+          <div class="trip-workspace" id="trip-workspace">
+            <!-- Active Trip Selector -->
+            <div class="trip-meta-bar">
+              <div class="trip-selector-wrap">
+                <label for="active-trip-select">Current Trip:</label>
+                <select id="active-trip-select" class="select-styled">
+                  <!-- Injected via JS -->
+                </select>
+              </div>
+              <div class="trip-stats-pills">
+                <span class="stat-badge" id="trip-budget-badge">Budget: $4,500</span>
+                <span class="stat-badge" id="trip-days-badge">7 Days</span>
+                <span class="stat-badge status-planning" id="trip-status-badge">Planning</span>
+              </div>
+            </div>
+
+            <!-- Itinerary Days Timeline -->
+            <div class="itinerary-timeline" id="itinerary-timeline">
+              <!-- Injected dynamically -->
+            </div>
+
+            <div class="itinerary-action-bar">
+              <button class="btn btn-outline" id="btn-add-activity">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Add Activity to Itinerary
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- User's Saved Favorites Section -->
+      <section id="saved" class="section-block">
+        <div class="section-header">
+          <div>
+            <span class="section-tag">Personal Wishlist</span>
+            <h2 class="section-title">Saved Sanctuaries</h2>
+          </div>
+        </div>
+        <div class="favorites-grid" id="favorites-grid">
+          <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+            <p>You haven't bookmarked any destinations or packages yet.</p>
+            <a href="#destinations" class="btn btn-outline btn-sm">Explore Destinations</a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Booking Modal -->
+    <div class="modal-backdrop" id="booking-modal" style="display: none;">
+      <div class="modal-dialog">
+        <button class="modal-close" id="btn-close-booking">&times;</button>
+        <div class="modal-header">
+          <span class="section-tag">Instant Reservation</span>
+          <h3 id="booking-package-title">Book Package</h3>
+        </div>
+        <form id="booking-form" class="modal-body">
+          <div class="form-group">
+            <label for="booking-start-date">Departure Date</label>
+            <input type="date" id="booking-start-date" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="booking-travelers">Travelers</label>
+              <select id="booking-travelers">
+                <option value="1">1 Guest</option>
+                <option value="2" selected>2 Guests</option>
+                <option value="3">3 Guests</option>
+                <option value="4">4 Guests</option>
+                <option value="6">6 Guests</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Estimated Total</label>
+              <div class="calculated-price" id="booking-total-display">$0.00</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="booking-email">Contact Email</label>
+            <input type="email" id="booking-email" placeholder="traveler@luxury.com" required />
+          </div>
+          <div class="form-group">
+            <label for="booking-phone">Phone Number (Optional)</label>
+            <input type="tel" id="booking-phone" placeholder="+1 (555) 234-5678" />
+          </div>
+          <div class="form-group">
+            <label for="booking-requests">Special Concierge Requests</label>
+            <textarea id="booking-requests" rows="2" placeholder="Dietary preferences, celebration notices, private transfers..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-confirm-booking">Confirm Reservation</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Auth Modal (Firebase Auth & Guest Mode) -->
+    <div class="modal-backdrop" id="auth-modal" style="display: none;">
+      <div class="modal-dialog modal-sm">
+        <button class="modal-close" id="btn-close-auth">&times;</button>
+        <div class="modal-header text-center">
+          <span class="logo-icon">✦</span>
+          <h3>Traveler Club</h3>
+          <p class="modal-sub">Sign in to sync your trips, itineraries, and reservations across devices.</p>
+        </div>
+        <form id="auth-form" class="modal-body">
+          <div class="form-group">
+            <label for="auth-email">Email Address</label>
+            <input type="email" id="auth-email" placeholder="your@email.com" required />
+          </div>
+          <div class="form-group">
+            <label for="auth-password">Password</label>
+            <input type="password" id="auth-password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-submit-auth">Sign In</button>
+          <div class="divider"><span>OR</span></div>
+          <button type="button" class="btn btn-outline btn-block" id="btn-guest-auth">Continue as Guest Explorer</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-container">
+        <div class="footer-col">
+          <div class="brand-logo">
+            <span class="logo-icon">✦</span>
+            <span class="logo-text">VOYAGE</span>
+          </div>
+          <p class="footer-desc">Curating peerless journeys and transformative travel across the globe.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Architecture & Tech</h4>
+          <ul>
+            <li>Supabase PostgreSQL & PostgREST</li>
+            <li>Row Level Security (RLS)</li>
+            <li>Firebase Authentication Bridge</li>
+            <li>Vite Native Frontend</li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Destinations</h4>
+          <ul>
+            <li>Kyoto, Japan</li>
+            <li>Amalfi Coast, Italy</li>
+            <li>Santorini, Greece</li>
+            <li>Banff National Park, Canada</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 VOYAGE Mini. Connected to Supabase Project <code>ntoayhpdqpvaylndeyyx</code>.</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

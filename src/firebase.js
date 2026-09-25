@@ -2,14 +2,21 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
+const env = typeof import.meta !== 'undefined' ? import.meta.env : {};
+
 const firebaseConfig = {
-  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env?.VITE_FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || ''
+  apiKey: env?.VITE_FIREBASE_API_KEY || '',
+  authDomain: env?.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: env?.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: env?.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: env?.VITE_FIREBASE_APP_ID || ''
 };
 
-export const firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
-export const auth = getAuth(firebaseApp);
+export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.apiKey.trim() !== '');
+
+export const firebaseApp = isFirebaseConfigured
+  ? (!getApps().length ? initializeApp(firebaseConfig) : getApps()[0])
+  : null;
+
+export const auth = firebaseApp ? getAuth(firebaseApp) : null;
