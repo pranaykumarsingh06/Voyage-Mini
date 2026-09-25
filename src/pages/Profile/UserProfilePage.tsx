@@ -4,10 +4,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/common/Button';
 
 export const UserProfilePage: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, updateUserProfile } = useAuth();
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [interests, setInterests] = useState<string[]>([
     'Temple Architecture',
@@ -35,10 +36,21 @@ export const UserProfilePage: React.FC = () => {
     'Wellness & Thermal Onsens',
   ];
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setSaving(true);
+    try {
+      await updateUserProfile({
+        full_name: fullName,
+        avatar_url: avatarUrl,
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -172,7 +184,7 @@ export const UserProfilePage: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-border-subtle">
-              <Button type="submit" variant="primary" size="md">
+              <Button type="submit" variant="primary" size="md" isLoading={saving}>
                 Save Preferences
               </Button>
             </div>

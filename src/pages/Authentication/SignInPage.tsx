@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Sparkles, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAuthErrorMessage } from '../../lib/firebase';
 import { Button } from '../../components/common/Button';
 
 export const SignInPage: React.FC = () => {
@@ -26,7 +27,7 @@ export const SignInPage: React.FC = () => {
       await signIn(email, password);
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password credentials.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -39,7 +40,7 @@ export const SignInPage: React.FC = () => {
       await signInGoogle();
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Google authentication failed.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }

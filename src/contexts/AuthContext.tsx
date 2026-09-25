@@ -11,6 +11,7 @@ interface AuthContextType extends AuthState {
   signInGoogle: () => Promise<any>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateUserProfile: (updates: Partial<Profile>) => Promise<Profile | null>;
   simulateAdminMode: (enable: boolean) => void;
 }
 
@@ -37,7 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               displayName: currentUser.displayName,
               photoURL: currentUser.photoURL,
             });
-            setProfile(synced);
+            if (synced) {
+              setProfile(synced);
+            }
           } catch (e) {
             console.warn('[Auth] Failed to sync profile:', e);
           }
@@ -65,7 +68,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, pass: string) => {
     if (isFirebaseConfigured) {
-      return await loginWithEmail(email, pass);
+      const cred = await loginWithEmail(email, pass);
+      if (cred?.user) {
+        try {
+          const synced = await syncUserProfile({
+            uid: cred.user.uid,
+            email: cred.user.email,
+            displayName: cred.user.displayName,
+            photoURL: cred.user.photoURL,
+          });
+          if (synced) setProfile(synced);
+        } catch (e) {
+          console.warn('[Auth] Sync after sign in:', e);
+        }
+      }
+      return cred;
     } else {
       // Demo authentication mode
       const mockProfile: Profile = {
@@ -86,7 +103,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, pass: string, name: string) => {
     if (isFirebaseConfigured) {
-      return await registerWithEmail(email, pass, name);
+      const cred = await registerWithEmail(email, pass, name);
+      if (cred?.user) {
+        try {
+          const synced = await syncUserProfile({
+            uid: cred.user.uid,
+            email: cred.user.email,
+            displayName: name || cred.user.displayName,
+            photoURL: cred.user.photoURL,
+          });
+          if (synced) setProfile(synced);
+        } catch (e) {
+          console.warn('[Auth] Sync after sign up:', e);
+        }
+      }
+      return cred;
     } else {
       const mockProfile: Profile = {
         id: 'mock-' + Math.random().toString(36).substr(2, 9),
@@ -106,7 +137,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInGoogle = async () => {
     if (isFirebaseConfigured) {
-      return await loginWithGoogle();
+      const cred = await loginWithGoogle();
+      if (cred?.user) {
+        try {
+          const synced = await syncUserProfile({
+            uid: cred.user.uid,
+            email: cred.user.email,
+            displayName: cred.user.displayName,
+            photoURL: cred.user.photoURL,
+          });
+          if (synced) setProfile(synced);
+        } catch (e) {
+          console.warn('[Auth] Sync after Google login:', e);
+        }
+      }
+      return cred;
     } else {
       const mockProfile: Profile = {
         id: 'mock-google-1',
@@ -140,6 +185,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserProfile = async (updates: Partial<Profile>): Promise<Profile | null> => {
+    if (!profile) return null;
+    const updated = { ...profile, ...updates, updated_at: new Date().toISOString() };
+    setProfile(updated);
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('firebase_uid', profile.firebase_uid)
+          .select()
+          .single();
+        if (data) {
+          setProfile(data as Profile);
+          return data as Profile;
+        }
+      } catch (err) {
+        console.warn('[Auth] Could not update profile in Supabase:', err);
+      }
+    } else {
+      localStorage.setItem('voyage_demo_user', JSON.stringify(updated));
+    }
+    return updated;
+  };
+
   const simulateAdminMode = (enable: boolean) => {
     setDemoAdmin(enable);
     if (profile) {
@@ -164,6 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInGoogle,
         signOut,
         resetPassword,
+        updateUserProfile,
         simulateAdminMode,
       }}
     >

@@ -51,8 +51,15 @@ export function App() {
                 }
               />
 
-              {/* Admin Panel */}
-              <Route path="admin" element={<AdminDashboardPage />} />
+              {/* Protected Admin Console */}
+              <Route
+                path="admin"
+                element={
+                  <ProtectedRoute requireAdmin>
+                    <AdminDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Authentication */}
               <Route path="auth/signin" element={<SignInPage />} />

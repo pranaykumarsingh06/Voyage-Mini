@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAuthErrorMessage } from '../../lib/firebase';
 import { Button } from '../../components/common/Button';
 
 export const ForgotPasswordPage: React.FC = () => {
@@ -20,7 +21,7 @@ export const ForgotPasswordPage: React.FC = () => {
       await resetPassword(email);
       setSent(true);
     } catch (err: any) {
-      setError(err.message || 'Could not send reset email.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
