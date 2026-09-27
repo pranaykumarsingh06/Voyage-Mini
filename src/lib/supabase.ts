@@ -92,16 +92,41 @@ export async function syncUserProfile(firebaseUser: {
       }
     }
 
-    // Strategy 1: Call PostgreSQL Stored Procedure `sync_user_profile` (SECURITY DEFINER)
-    const { data: rpcProfile, error: rpcError } = await supabase.rpc('sync_user_profile', {
-      p_firebase_uid: profilePayload.firebase_uid,
-      p_email: profilePayload.email || '',
-      p_full_name: profilePayload.full_name,
-      p_avatar_url: profilePayload.avatar_url,
-      p_token: idToken || undefined,
-    });
+    // Strategy 1A: Call PostgreSQL Stored Procedure `sync_user_profile` (5 parameters with token)
+    let rpcProfile: Profile | null = null;
+    let rpcError: any = null;
 
-    if (!rpcError && rpcProfile) {
+    if (idToken) {
+      const res5 = await supabase.rpc('sync_user_profile', {
+        p_firebase_uid: profilePayload.firebase_uid,
+        p_email: profilePayload.email || '',
+        p_full_name: profilePayload.full_name,
+        p_avatar_url: profilePayload.avatar_url,
+        p_token: idToken,
+      });
+      if (!res5.error && res5.data) {
+        rpcProfile = res5.data as Profile;
+      } else {
+        rpcError = res5.error;
+      }
+    }
+
+    // Strategy 1B: If 5-param RPC was not matched, try 4-parameter RPC signature
+    if (!rpcProfile) {
+      const res4 = await supabase.rpc('sync_user_profile', {
+        p_firebase_uid: profilePayload.firebase_uid,
+        p_email: profilePayload.email || '',
+        p_full_name: profilePayload.full_name,
+        p_avatar_url: profilePayload.avatar_url,
+      });
+      if (!res4.error && res4.data) {
+        rpcProfile = res4.data as Profile;
+      } else if (!rpcError) {
+        rpcError = res4.error;
+      }
+    }
+
+    if (rpcProfile) {
       console.log('[Supabase] Profile synchronized via RPC successfully:', rpcProfile.email);
       return rpcProfile as Profile;
     }
@@ -121,21 +146,39 @@ export async function syncUserProfile(firebaseUser: {
         { onConflict: 'firebase_uid' }
       )
       .select()
-      .single();
+      .maybeSingle();
 
     if (!upsertError && upsertedProfile) {
       console.log('[Supabase] Profile upserted successfully in database:', upsertedProfile.email);
       return upsertedProfile as Profile;
     }
 
-    // If both direct upsert and RPC failed, report meaningful error
-    const failureReason = upsertError?.message || rpcError?.message || 'Unknown database error';
+    // Strategy 3: Verification check - check if profile already exists in Supabase
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('firebase_uid', profilePayload.firebase_uid)
+      .maybeSingle();
+
+    if (!checkError && existingProfile) {
+      console.log('[Supabase] Verified existing profile in database:', existingProfile.email);
+      return existingProfile as Profile;
+    }
+
+    // If all strategies failed, report meaningful error
+    const failureReason = upsertError?.message || rpcError?.message || checkError?.message || 'Database rejected profile sync';
     console.error('[Supabase] Profile synchronization failed:', failureReason);
     
-    // Check if error is RLS violation
+    // Check if error is RLS violation or missing function
     if (failureReason.includes('row-level security') || failureReason.includes('42501')) {
       throw new Error(
-        `Database profile sync restricted by Row Level Security policy. Please execute migration '20260926000001_sync_profiles_rls.sql' in Supabase SQL editor.`
+        `Database profile sync restricted by Row Level Security policy. Please execute migration '20260926000001_sync_profiles_rls.sql' in Supabase SQL editor to allow profile synchronization.`
+      );
+    }
+
+    if (failureReason.includes('schema cache') || failureReason.includes('PGRST202')) {
+      throw new Error(
+        `Supabase function 'sync_user_profile' was not found in schema cache. Please execute migration '20260926000001_sync_profiles_rls.sql' in Supabase SQL editor.`
       );
     }
 

@@ -86,16 +86,41 @@ export async function syncUserProfile(firebaseUser) {
       }
     }
 
-    // Strategy 1: Stored Procedure sync_user_profile (SECURITY DEFINER)
-    const { data: rpcProfile, error: rpcError } = await supabase.rpc('sync_user_profile', {
-      p_firebase_uid: profilePayload.firebase_uid,
-      p_email: profilePayload.email || '',
-      p_full_name: profilePayload.full_name,
-      p_avatar_url: profilePayload.avatar_url,
-      p_token: idToken || undefined
-    });
+    // Strategy 1A: Stored Procedure sync_user_profile (5 parameters with token)
+    let rpcProfile = null;
+    let rpcError = null;
 
-    if (!rpcError && rpcProfile) {
+    if (idToken) {
+      const res5 = await supabase.rpc('sync_user_profile', {
+        p_firebase_uid: profilePayload.firebase_uid,
+        p_email: profilePayload.email || '',
+        p_full_name: profilePayload.full_name,
+        p_avatar_url: profilePayload.avatar_url,
+        p_token: idToken,
+      });
+      if (!res5.error && res5.data) {
+        rpcProfile = res5.data;
+      } else {
+        rpcError = res5.error;
+      }
+    }
+
+    // Strategy 1B: Try 4-parameter RPC signature
+    if (!rpcProfile) {
+      const res4 = await supabase.rpc('sync_user_profile', {
+        p_firebase_uid: profilePayload.firebase_uid,
+        p_email: profilePayload.email || '',
+        p_full_name: profilePayload.full_name,
+        p_avatar_url: profilePayload.avatar_url,
+      });
+      if (!res4.error && res4.data) {
+        rpcProfile = res4.data;
+      } else if (!rpcError) {
+        rpcError = res4.error;
+      }
+    }
+
+    if (rpcProfile) {
       console.log('[SupabaseClient] Profile synchronized via RPC:', rpcProfile.email);
       return rpcProfile;
     }
@@ -115,19 +140,37 @@ export async function syncUserProfile(firebaseUser) {
         { onConflict: 'firebase_uid' }
       )
       .select()
-      .single();
+      .maybeSingle();
 
     if (!upsertError && upsertedProfile) {
       console.log('[SupabaseClient] Profile upserted successfully in database:', upsertedProfile.email);
       return upsertedProfile;
     }
 
-    const failureReason = upsertError?.message || rpcError?.message || 'Database sync failed';
+    // Strategy 3: Verification check
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('firebase_uid', profilePayload.firebase_uid)
+      .maybeSingle();
+
+    if (!checkError && existingProfile) {
+      console.log('[SupabaseClient] Verified existing profile in database:', existingProfile.email);
+      return existingProfile;
+    }
+
+    const failureReason = upsertError?.message || rpcError?.message || checkError?.message || 'Database sync failed';
     console.error('[SupabaseClient] Profile synchronization failed:', failureReason);
 
     if (failureReason.includes('row-level security') || failureReason.includes('42501')) {
       throw new Error(
         `Database profile sync restricted by Row Level Security policy. Please execute migration '20260926000001_sync_profiles_rls.sql' in Supabase SQL editor.`
+      );
+    }
+
+    if (failureReason.includes('schema cache') || failureReason.includes('PGRST202')) {
+      throw new Error(
+        `Supabase function 'sync_user_profile' was not found in schema cache. Please execute migration '20260926000001_sync_profiles_rls.sql' in Supabase SQL editor.`
       );
     }
 

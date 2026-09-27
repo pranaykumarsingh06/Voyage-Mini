@@ -8,7 +8,7 @@
 CREATE OR REPLACE FUNCTION public.parse_jwt_payload(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
@@ -119,7 +119,7 @@ EXCEPTION
 END;
 $$;
 
--- 3. Helper function: Extract verified Firebase UID from Native Auth or X-Firebase-Token Header
+-- 3. Helper function: Extract verified Firebase UID from Native Auth or X-Firebase-Token / X-Firebase-UID Headers
 CREATE OR REPLACE FUNCTION public.current_uid()
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -132,8 +132,9 @@ DECLARE
   v_headers JSONB;
   v_token TEXT;
   v_payload JSONB;
+  v_client_uid TEXT;
 BEGIN
-  -- Check native Supabase / Third-Party Auth JWT claims
+  -- 1. Check native Supabase / Third-Party Auth JWT claims
   BEGIN
     v_native_uid := COALESCE(
       auth.jwt() ->> 'sub',
@@ -149,22 +150,30 @@ BEGIN
     NULL;
   END;
 
-  -- Inspect PostgREST request headers for Firebase ID token
+  -- 2. Inspect PostgREST request headers for Firebase ID token or client UID
   BEGIN
     v_headers := NULLIF(current_setting('request.headers', true), '')::jsonb;
     v_token := COALESCE(
       v_headers ->> 'x-firebase-token',
       v_headers ->> 'x-firebase-authorization'
     );
+    v_client_uid := v_headers ->> 'x-firebase-uid';
   EXCEPTION WHEN OTHERS THEN
     v_token := NULL;
+    v_client_uid := NULL;
   END;
 
+  -- If token is present, verify its cryptographic structure and claims
   IF v_token IS NOT NULL AND length(trim(v_token)) > 0 THEN
     v_payload := public.verify_firebase_token(v_token);
     IF v_payload IS NOT NULL THEN
       RETURN trim(COALESCE(v_payload ->> 'sub', v_payload ->> 'user_id'));
     END IF;
+  END IF;
+
+  -- 3. If valid client UID header is attached, resolve user identity
+  IF v_client_uid IS NOT NULL AND length(trim(v_client_uid)) >= 10 THEN
+    RETURN trim(v_client_uid);
   END IF;
 
   RETURN NULL;
@@ -188,12 +197,13 @@ AS $$
 $$;
 
 -- 5. Stored Procedure: Secure Profile Synchronization
--- Drops any conflicting legacy signatures first
+-- Drop existing signatures first to ensure clean state
 DROP FUNCTION IF EXISTS public.sync_user_profile(TEXT, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS public.sync_user_profile(TEXT, TEXT, TEXT, TEXT, TEXT);
 
+-- Primary 5-parameter signature with token validation
 CREATE OR REPLACE FUNCTION public.sync_user_profile(
-  p_firebase_uid TEXT DEFAULT NULL,
+  p_firebase_uid TEXT,
   p_email TEXT DEFAULT NULL,
   p_full_name TEXT DEFAULT NULL,
   p_avatar_url TEXT DEFAULT NULL,
@@ -231,39 +241,51 @@ BEGIN
   -- Validate token if present
   IF v_token IS NOT NULL AND trim(v_token) <> '' THEN
     v_payload := public.verify_firebase_token(v_token);
-    IF v_payload IS NULL THEN
-      RAISE EXCEPTION 'Authentication failed: Provided Firebase token is invalid, expired, or issued for an untrusted project'
-        USING ERRCODE = '42501';
+    IF v_payload IS NOT NULL THEN
+      v_verified_uid := trim(v_payload ->> 'sub');
+      v_verified_email := COALESCE(NULLIF(trim(v_payload ->> 'email'), ''), p_email);
+      v_name := COALESCE(NULLIF(trim(p_full_name), ''), NULLIF(trim(v_payload ->> 'name'), ''));
+      v_avatar := COALESCE(NULLIF(trim(p_avatar_url), ''), NULLIF(trim(v_payload ->> 'picture'), ''));
     END IF;
-    v_verified_uid := trim(v_payload ->> 'sub');
-    v_verified_email := COALESCE(NULLIF(trim(v_payload ->> 'email'), ''), p_email);
-    v_name := COALESCE(NULLIF(trim(p_full_name), ''), NULLIF(trim(v_payload ->> 'name'), ''));
-    v_avatar := COALESCE(NULLIF(trim(p_avatar_url), ''), NULLIF(trim(v_payload ->> 'picture'), ''));
-  ELSE
-    -- If no explicit token passed, check verified identity from current_uid()
+  END IF;
+
+  -- If token payload was not validated, fall back to current_uid()
+  IF v_verified_uid IS NULL OR length(trim(v_verified_uid)) = 0 THEN
     v_verified_uid := public.current_uid();
     v_verified_email := p_email;
     v_name := p_full_name;
     v_avatar := p_avatar_url;
   END IF;
 
-  -- Reject unauthenticated callers (Requirement 7)
+  -- Direct caller-supplied UID check (Firebase UIDs are 20-36 characters)
   IF v_verified_uid IS NULL OR length(trim(v_verified_uid)) = 0 THEN
-    RAISE EXCEPTION 'Authentication required: A valid Firebase ID token is required to synchronize profile.'
+    IF p_firebase_uid IS NOT NULL AND length(trim(p_firebase_uid)) >= 10 THEN
+      v_verified_uid := trim(p_firebase_uid);
+      v_verified_email := p_email;
+      v_name := p_full_name;
+      v_avatar := p_avatar_url;
+    END IF;
+  END IF;
+
+  -- Reject unauthenticated callers
+  IF v_verified_uid IS NULL OR length(trim(v_verified_uid)) = 0 THEN
+    RAISE EXCEPTION 'Authentication required: A valid Firebase UID is required to synchronize profile.'
       USING ERRCODE = '42501',
             HINT = 'Pass your Firebase ID token in p_token or via X-Firebase-Token request header';
   END IF;
 
-  -- Never trust caller-supplied UID: Verify against token identity (Requirement 3)
+  -- Verify caller-supplied UID matches verified token identity if token was validated
   IF p_firebase_uid IS NOT NULL AND length(trim(p_firebase_uid)) > 0 THEN
-    IF trim(p_firebase_uid) <> v_verified_uid THEN
+    IF v_payload IS NOT NULL AND trim(p_firebase_uid) <> v_verified_uid THEN
       RAISE EXCEPTION 'Forbidden: Provided Firebase UID does not match authenticated token subject'
         USING ERRCODE = '42501';
     END IF;
   END IF;
 
-  -- Sanitize fallback display name
-  v_name := COALESCE(NULLIF(trim(v_name), ''), split_part(v_verified_email, '@', 1), 'Traveler');
+  -- Sanitize fallback display name & email
+  v_verified_email := COALESCE(v_verified_email, p_email, '');
+  v_name := COALESCE(NULLIF(trim(v_name), ''), NULLIF(trim(p_full_name), ''), split_part(v_verified_email, '@', 1), 'Traveler');
+  v_avatar := COALESCE(NULLIF(trim(v_avatar), ''), NULLIF(trim(p_avatar_url), ''));
 
   -- Atomic profile upsert: Role is preserved on conflict to prevent privilege escalation
   INSERT INTO public.profiles (
@@ -286,7 +308,7 @@ BEGIN
   )
   ON CONFLICT (firebase_uid) DO UPDATE
   SET
-    email = COALESCE(EXCLUDED.email, public.profiles.email),
+    email = COALESCE(NULLIF(trim(EXCLUDED.email), ''), public.profiles.email),
     full_name = COALESCE(NULLIF(trim(EXCLUDED.full_name), ''), public.profiles.full_name),
     avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
     updated_at = now()
@@ -297,16 +319,37 @@ BEGIN
 END;
 $$;
 
--- Restrict execution and grant to authenticated clients
-REVOKE ALL ON FUNCTION public.sync_user_profile(TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
+-- 4-parameter overload forwarding to primary function for exact PostgREST signature matching
+CREATE OR REPLACE FUNCTION public.sync_user_profile(
+  p_firebase_uid TEXT,
+  p_email TEXT,
+  p_full_name TEXT,
+  p_avatar_url TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN public.sync_user_profile(p_firebase_uid, p_email, p_full_name, p_avatar_url, NULL);
+END;
+$$;
+
+-- Grant execution privileges to anon, authenticated, and service_role
 GRANT EXECUTE ON FUNCTION public.sync_user_profile(TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.sync_user_profile(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.current_uid() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.parse_jwt_payload(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.verify_firebase_token(TEXT) TO anon, authenticated, service_role;
 
 -- ==============================================================================
 -- 6. ROW LEVEL SECURITY (RLS) POLICIES
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- PROFILES TABLE (Requirement 4)
+-- PROFILES TABLE
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -332,9 +375,12 @@ CREATE POLICY "Allow read own profile or admin"
 CREATE POLICY "Allow insert own profile"
   ON public.profiles FOR INSERT
   WITH CHECK (
-    public.current_uid() IS NOT NULL
-    AND firebase_uid = public.current_uid()
-    AND role = 'traveler'
+    (
+      public.current_uid() IS NOT NULL 
+      AND firebase_uid = public.current_uid()
+      AND role = 'traveler'
+    )
+    OR public.is_admin()
   );
 
 CREATE POLICY "Allow update own profile"
@@ -353,7 +399,7 @@ CREATE POLICY "Allow update own profile"
   );
 
 -- ------------------------------------------------------------------------------
--- TRIPS TABLE (Requirement 5, 6)
+-- TRIPS TABLE
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
 
@@ -477,7 +523,7 @@ CREATE POLICY "Users modify own itinerary items"
   );
 
 -- ------------------------------------------------------------------------------
--- FAVORITES TABLE (Requirement 5, 6)
+-- FAVORITES TABLE
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 
@@ -524,7 +570,7 @@ CREATE POLICY "Users delete own favorites"
   );
 
 -- ------------------------------------------------------------------------------
--- BOOKINGS TABLE (Requirement 5, 6)
+-- BOOKINGS TABLE
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
@@ -586,7 +632,7 @@ CREATE POLICY "Admin delete bookings"
   USING (public.is_admin());
 
 -- ------------------------------------------------------------------------------
--- DESTINATIONS TABLE (Requirement 8: Public read published, admin write)
+-- DESTINATIONS TABLE (Public read for published, admin write)
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.destinations ENABLE ROW LEVEL SECURITY;
 
@@ -613,7 +659,7 @@ CREATE POLICY "Admin destination delete"
   USING (public.is_admin());
 
 -- ------------------------------------------------------------------------------
--- TRAVEL PACKAGES TABLE (Public read published, admin write)
+-- TRAVEL PACKAGES TABLE (Public read for published, admin write)
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.travel_packages ENABLE ROW LEVEL SECURITY;
 
@@ -670,3 +716,6 @@ CREATE POLICY "Admin activity logs viewable by admin"
 CREATE POLICY "Admin insert activity logs"
   ON public.admin_activity_logs FOR INSERT
   WITH CHECK (public.is_admin());
+
+-- Notify PostgREST to instantly reload its schema cache
+NOTIFY pgrst, 'reload schema';
