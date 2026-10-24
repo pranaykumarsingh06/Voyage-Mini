@@ -157,6 +157,23 @@ export const SignInPage: React.FC = () => {
           <span>Continue with Google</span>
         </button>
 
+        <div className="mt-5 p-3 rounded-2xl bg-white/[0.03] border border-border-subtle flex items-center justify-between text-xs">
+          <div className="text-left">
+            <span className="text-[10px] uppercase font-bold text-gold tracking-wider block">Administrator Login</span>
+            <span className="text-surface-400 text-[11px]">pranaykrsingh03@gmail.com</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('pranaykrsingh03@gmail.com');
+              setPassword('12341234');
+            }}
+            className="text-[11px] font-semibold text-primary hover:underline"
+          >
+            Fill Admin Credentials
+          </button>
+        </div>
+
         <p className="text-center text-xs text-surface-400 mt-6">
           Don't have an account yet?{' '}
           <Link to="/auth/signup" className="text-primary font-bold hover:underline">

@@ -23,8 +23,9 @@ export const Navbar: React.FC = () => {
     { to: '/explore', label: 'Explore', icon: Compass },
     { to: '/destinations', label: 'Destinations', icon: MapPin },
     { to: '/packages', label: 'Packages', icon: Sparkles },
-    { to: '/planner', label: 'Plan a Trip', icon: Calendar },
-    { to: '/dashboard', label: 'My Trips', icon: User },
+    { to: '/bookings', label: 'My Trips', icon: Calendar },
+    { to: '/planner', label: 'Plan a Trip', icon: Compass },
+    { to: '/admin', label: 'Admin', icon: Shield },
   ];
 
   return (
@@ -135,6 +136,15 @@ export const Navbar: React.FC = () => {
                   </Link>
 
                   <Link
+                    to="/bookings"
+                    onClick={() => setProfileDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-xl hover:bg-white/[0.08] hover:text-white transition-colors"
+                  >
+                    <Calendar className="w-4 h-4 text-primary" />
+                    My Trips
+                  </Link>
+
+                  <Link
                     to="/profile"
                     onClick={() => setProfileDropdownOpen(false)}
                     className="flex items-center gap-2.5 px-3 py-2 text-xs rounded-xl hover:bg-white/[0.08] hover:text-white transition-colors"
@@ -218,16 +228,6 @@ export const Navbar: React.FC = () => {
                 {link.label}
               </NavLink>
             ))}
-            {isAdmin && (
-              <NavLink
-                to="/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-primary/20 text-primary border border-primary/30"
-              >
-                <Shield className="w-4 h-4" />
-                Admin Panel
-              </NavLink>
-            )}
           </nav>
 
           <div className="pt-4 border-t border-border-subtle flex flex-col gap-2">

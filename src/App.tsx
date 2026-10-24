@@ -13,6 +13,7 @@ import { PackagesPage } from './pages/Packages/PackagesPage';
 import { TripPlannerPage } from './pages/TripPlanner/TripPlannerPage';
 import { UserDashboardPage } from './pages/Dashboard/UserDashboardPage';
 import { UserProfilePage } from './pages/Profile/UserProfilePage';
+import { MyBookingsPage } from './pages/Bookings/MyBookingsPage';
 import { AdminDashboardPage } from './pages/Admin/AdminDashboardPage';
 import { SignInPage } from './pages/Authentication/SignInPage';
 import { SignUpPage } from './pages/Authentication/SignUpPage';
@@ -34,6 +35,30 @@ export function App() {
               <Route path="planner" element={<TripPlannerPage />} />
 
               {/* Protected Traveler Routes */}
+              <Route
+                path="bookings"
+                element={
+                  <ProtectedRoute>
+                    <MyBookingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="my-trips"
+                element={
+                  <ProtectedRoute>
+                    <MyBookingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="my-bookings"
+                element={
+                  <ProtectedRoute>
+                    <MyBookingsPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="dashboard"
                 element={

@@ -19,17 +19,19 @@ import {
   Activity,
   FileText
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { Link } from 'react-router-dom';
+import { useAuth, ADMIN_EMAIL } from '../../contexts/AuthContext';
 import { useDestinations } from '../../hooks/useDestinations';
 import { usePackages } from '../../hooks/usePackages';
 import { useBookings } from '../../hooks/useBookings';
 import { INITIAL_PROFILES } from '../../lib/mockData';
-import { Destination, TravelPackage, BookingStatus } from '../../types/database';
+import { Destination, TravelPackage, BookingStatus, Profile } from '../../types/database';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { Button } from '../../components/common/Button';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 
 export const AdminDashboardPage: React.FC = () => {
-  const { profile, isAdmin, simulateAdminMode } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const { destinations } = useDestinations();
   const { packages } = usePackages();
   const { bookings, updateBookingStatus } = useBookings();
@@ -52,26 +54,53 @@ export const AdminDashboardPage: React.FC = () => {
   // Packages Management state
   const [pkgList, setPkgList] = useState<TravelPackage[]>(packages);
 
-  // Users state
-  const [usersList] = useState(INITIAL_PROFILES);
+  // Users state with live database loading
+  const [usersList, setUsersList] = useState<Profile[]>(INITIAL_PROFILES);
   const [userSearch, setUserSearch] = useState('');
+
+  React.useEffect(() => {
+    if (isSupabaseConfigured) {
+      supabase.from('profiles').select('*').then(({ data, error }: { data: any; error: any }) => {
+        if (!error && data && data.length > 0) {
+          setUsersList(data as Profile[]);
+        }
+      });
+    }
+  }, []);
 
   // Activity logs
   const [logs] = useState([
-    { id: '1', action: 'Published destination "Kyoto Heritage"', time: '10 minutes ago', admin: 'Voyage Master Admin' },
-    { id: '2', action: 'Confirmed reservation for Julian Vance', time: '1 hour ago', admin: 'Voyage Master Admin' },
-    { id: '3', action: 'Updated package pricing for Amalfi Coast Sail', time: '3 hours ago', admin: 'Voyage Master Admin' },
+    { id: '1', action: 'Published destination "Kyoto Heritage"', time: '10 minutes ago', admin: 'pranaykrsingh03@gmail.com' },
+    { id: '2', action: 'Confirmed reservation for Julian Vance', time: '1 hour ago', admin: 'pranaykrsingh03@gmail.com' },
+    { id: '3', action: 'Updated package pricing for Amalfi Coast Sail', time: '3 hours ago', admin: 'pranaykrsingh03@gmail.com' },
   ]);
 
-  const handleTogglePublishDest = (id: string) => {
-    setDestList(destList.map(d => d.id === id ? { ...d, is_published: !d.is_published } : d));
+  const handleTogglePublishDest = async (id: string) => {
+    const target = destList.find(d => d.id === id);
+    if (!target) return;
+    const nextState = !target.is_published;
+    setDestList(destList.map(d => d.id === id ? { ...d, is_published: nextState } : d));
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('destinations').update({ is_published: nextState }).eq('id', id);
+      } catch (err) {
+        console.warn('[Admin] Destination update error:', err);
+      }
+    }
   };
 
-  const handleDeleteDest = (id: string) => {
+  const handleDeleteDest = async (id: string) => {
     setDestList(destList.filter(d => d.id !== id));
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('destinations').delete().eq('id', id);
+      } catch (err) {
+        console.warn('[Admin] Destination delete error:', err);
+      }
+    }
   };
 
-  const handleCreateDest = (e: React.FormEvent) => {
+  const handleCreateDest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDestName || !newDestCountry) return;
 
@@ -95,13 +124,31 @@ export const AdminDashboardPage: React.FC = () => {
     };
 
     setDestList([created, ...destList]);
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('destinations').insert({
+          name: created.name,
+          slug: created.slug,
+          country: created.country,
+          description: created.description,
+          hero_image: created.hero_image,
+          category: created.category,
+          estimated_budget: created.estimated_budget,
+          rating: created.rating,
+          is_published: true
+        });
+      } catch (err) {
+        console.warn('[Admin] Destination insert error:', err);
+      }
+    }
+
     setDestModalOpen(false);
     setNewDestName('');
     setNewDestCountry('');
     setNewDestDesc('');
   };
 
-  // If not admin and not in demo mode
+  // If not verified admin
   if (!isAdmin) {
     return (
       <div className="max-w-md mx-auto py-24 px-4 text-center space-y-6">
@@ -110,25 +157,20 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
         <h2 className="font-display font-bold text-3xl text-white">Privileged Access Required</h2>
         <p className="text-xs text-surface-400 leading-relaxed">
-          The Admin Control Panel is restricted to verified administrators. Your current session does not possess the <code>admin</code> role in the database.
+          The Voyage Operations Control Panel is strictly restricted to platform administrator <strong className="text-gold">{ADMIN_EMAIL}</strong>.
         </p>
 
-        {/* Demo Switcher for instant testing */}
-        <div className="p-4 rounded-2xl glass-panel border border-border-subtle text-left space-y-3">
-          <span className="text-[11px] font-bold text-gold uppercase tracking-wider block">
-            Tester Simulation
-          </span>
-          <p className="text-xs text-surface-400">
-            For local evaluation and demonstration, you can simulate an admin session with one click:
-          </p>
-          <Button
-            variant="gold"
-            size="sm"
-            onClick={() => simulateAdminMode(true)}
-            className="w-full"
-          >
-            Simulate Admin Clearance
-          </Button>
+        <div className="pt-2 flex flex-col gap-2">
+          <Link to="/auth/signin">
+            <Button variant="primary" size="md" className="w-full">
+              Sign In as Administrator
+            </Button>
+          </Link>
+          <Link to="/">
+            <Button variant="outline" size="sm" className="w-full">
+              Return to Website
+            </Button>
+          </Link>
         </div>
       </div>
     );
@@ -163,14 +205,13 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => simulateAdminMode(false)}
-            title="Switch back to traveler mode"
-          >
-            Exit Admin View
-          </Button>
+          <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-border-subtle text-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-surface-300 font-mono text-xs">{profile?.email}</span>
+            <span className="bg-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-primary/30">
+              Verified Administrator
+            </span>
+          </div>
         </div>
       </div>
 

@@ -1,16 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { auth } from './firebase';
 import { Profile } from '../types/database';
 
 const env = import.meta.env || {};
 
-export const supabaseUrl = env.VITE_SUPABASE_URL || 'https://ntoayhpdqpvaylndeyyx.supabase.co';
+export const supabaseUrl = env.VITE_SUPABASE_URL || '';
 export const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
-  supabaseAnonKey.trim() !== ''
+  supabaseAnonKey.trim() !== '' &&
+  !supabaseUrl.includes('your-project-id') &&
+  !supabaseAnonKey.includes('your_supabase')
 );
 
 /**
@@ -18,45 +20,53 @@ export const isSupabaseConfigured = Boolean(
  * When a Firebase user is logged in, their JWT is passed in the Authorization header
  * to satisfy PostgreSQL Row Level Security (RLS).
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'dummy-anon-key', {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-  global: {
-    fetch: async (url, options = {}) => {
-      const headers = new Headers(options.headers || {});
-      
-      // Ensure Supabase API key and Authorization header remain valid for PostgREST
-      if (!headers.has('apikey') && supabaseAnonKey) {
-        headers.set('apikey', supabaseAnonKey);
-      }
-      if (!headers.has('Authorization') && supabaseAnonKey) {
-        headers.set('Authorization', `Bearer ${supabaseAnonKey}`);
-      }
-
-      // Attach Firebase User ID and Token via custom headers
-      if (auth && auth.currentUser) {
-        headers.set('X-Firebase-UID', auth.currentUser.uid);
-        try {
-          const token = await auth.currentUser.getIdToken();
-          if (token) {
-            headers.set('X-Firebase-Token', token);
-          }
-        } catch (err) {
-          console.warn('[Supabase] Could not retrieve fresh Firebase token:', err);
-        }
-      }
-      
-      return fetch(url, { ...options, headers });
+let supabaseClientInstance: SupabaseClient;
+try {
+  supabaseClientInstance = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'dummy-anon-key', {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
-  },
-});
+    global: {
+      fetch: async (url, options = {}) => {
+        const headers = new Headers(options.headers || {});
+        
+        // Ensure Supabase API key and Authorization header remain valid for PostgREST
+        if (!headers.has('apikey') && supabaseAnonKey) {
+          headers.set('apikey', supabaseAnonKey);
+        }
+        if (!headers.has('Authorization') && supabaseAnonKey) {
+          headers.set('Authorization', `Bearer ${supabaseAnonKey}`);
+        }
+
+        // Attach Firebase User ID and Token via custom headers
+        if (auth && auth.currentUser) {
+          try {
+            headers.set('X-Firebase-UID', auth.currentUser.uid);
+            const token = await auth.currentUser.getIdToken();
+            if (token) {
+              headers.set('X-Firebase-Token', token);
+            }
+          } catch (err) {
+            console.warn('[Supabase] Could not retrieve fresh Firebase token:', err);
+          }
+        }
+        
+        return fetch(url, { ...options, headers });
+      },
+    },
+  });
+} catch (err) {
+  console.warn('[Supabase] Safe initialization fallback caught:', err);
+  supabaseClientInstance = createClient('https://placeholder.supabase.co', 'dummy-anon-key');
+}
+
+export const supabase: SupabaseClient = supabaseClientInstance;
 
 /**
  * Synchronize Firebase user details with Supabase 'profiles' table.
- * Uses atomic upsert linked by Firebase UID.
+ * Uses verified serverless API or atomic database RPC linked by verified Firebase identity.
  */
 export async function syncUserProfile(firebaseUser: { 
   uid: string; 
@@ -82,7 +92,7 @@ export async function syncUserProfile(firebaseUser: {
   };
 
   try {
-    // Obtain fresh Firebase ID Token for cryptographic identity verification in PostgreSQL
+    // Obtain fresh Firebase ID Token for cryptographic identity verification
     let idToken: string | null = null;
     if (auth && auth.currentUser) {
       try {
@@ -92,38 +102,50 @@ export async function syncUserProfile(firebaseUser: {
       }
     }
 
-    // Strategy 1A: Call PostgreSQL Stored Procedure `sync_user_profile` (5 parameters with token)
-    let rpcProfile: Profile | null = null;
-    let rpcError: any = null;
-
+    // Strategy 1: Secure Serverless API (/api/sync-profile)
+    // Cryptographically verifies ID token on server and uses service role for tamper-proof sync
     if (idToken) {
-      const res5 = await supabase.rpc('sync_user_profile', {
-        p_firebase_uid: profilePayload.firebase_uid,
-        p_email: profilePayload.email || '',
-        p_full_name: profilePayload.full_name,
-        p_avatar_url: profilePayload.avatar_url,
-        p_token: idToken,
-      });
-      if (!res5.error && res5.data) {
-        rpcProfile = res5.data as Profile;
-      } else {
-        rpcError = res5.error;
+      try {
+        const apiResponse = await fetch('/api/sync-profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            fullName: profilePayload.full_name,
+            avatarUrl: profilePayload.avatar_url,
+          }),
+        });
+
+        if (apiResponse.ok) {
+          const json = await apiResponse.json();
+          if (json.profile) {
+            console.log('[Supabase] Profile synchronized via serverless API:', json.profile.email);
+            return json.profile as Profile;
+          }
+        }
+      } catch {
+        // Fall back gracefully to direct PostgreSQL RPC
       }
     }
 
-    // Strategy 1B: If 5-param RPC was not matched, try 4-parameter RPC signature
-    if (!rpcProfile) {
-      const res4 = await supabase.rpc('sync_user_profile', {
-        p_firebase_uid: profilePayload.firebase_uid,
-        p_email: profilePayload.email || '',
-        p_full_name: profilePayload.full_name,
-        p_avatar_url: profilePayload.avatar_url,
-      });
-      if (!res4.error && res4.data) {
-        rpcProfile = res4.data as Profile;
-      } else if (!rpcError) {
-        rpcError = res4.error;
-      }
+    // Strategy 2: Call PostgreSQL Stored Procedure `sync_user_profile`
+    let rpcProfile: Profile | null = null;
+    let rpcError: any = null;
+
+    const resRpc = await supabase.rpc('sync_user_profile', {
+      p_firebase_uid: profilePayload.firebase_uid,
+      p_email: profilePayload.email || '',
+      p_full_name: profilePayload.full_name,
+      p_avatar_url: profilePayload.avatar_url,
+      p_token: idToken || null,
+    });
+
+    if (!resRpc.error && resRpc.data) {
+      rpcProfile = resRpc.data as Profile;
+    } else {
+      rpcError = resRpc.error;
     }
 
     if (rpcProfile) {

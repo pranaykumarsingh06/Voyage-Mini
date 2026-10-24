@@ -1,122 +1,101 @@
-import { useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
 import { Booking, BookingStatus } from '../types/database';
-import { INITIAL_BOOKINGS } from '../lib/mockData';
+import { 
+  getUserBookings, 
+  createBooking as createBookingApi, 
+  updateBookingStatus as updateStatusApi,
+  cancelBooking as cancelBookingApi,
+  CreateBookingInput
+} from '../lib/bookings';
 import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../lib/firebase';
+
+// Simple global event emitter for instant multi-component reactivity across tabs/components
+const BOOKINGS_UPDATED_EVENT = 'voyage_bookings_updated';
+
+export function notifyBookingsUpdated() {
+  window.dispatchEvent(new CustomEvent(BOOKINGS_UPDATED_EVENT));
+}
 
 export function useBookings() {
-  const { profile, isAdmin } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    try {
-      const saved = localStorage.getItem('voyage_bookings');
-      return saved ? JSON.parse(saved) : INITIAL_BOOKINGS;
-    } catch {
-      return INITIAL_BOOKINGS;
-    }
-  });
+  const { user, profile } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeUid = user?.uid || auth?.currentUser?.uid || profile?.firebase_uid;
+
+  const fetchBookings = useCallback(async () => {
+    if (!activeUid) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getUserBookings(activeUid);
+      setBookings(data);
+    } catch (err: any) {
+      console.error('[useBookings] fetchBookings error:', err);
+      setError(err?.message || 'Unable to load your bookings.');
+    } finally {
+      setLoading(false);
+    }
+  }, [activeUid]);
 
   useEffect(() => {
-    async function fetchBookings() {
-      if (!isSupabaseConfigured) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        let query = supabase
-          .from('bookings')
-          .select('*, package:travel_packages(*), profile:profiles(*)');
-
-        if (!isAdmin && profile?.id) {
-          query = query.eq('user_id', profile.id);
-        }
-
-        const { data, error } = await query.order('created_at', { ascending: false });
-
-        if (!error && data) {
-          setBookings(data as Booking[]);
-          localStorage.setItem('voyage_bookings', JSON.stringify(data));
-        }
-      } catch (e) {
-        console.warn('[useBookings] Error loading bookings:', e);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchBookings();
-  }, [profile?.id, isAdmin]);
 
-  const createBooking = async (bookingData: {
-    package_id: string;
-    travel_date: string;
-    travelers: number;
-    total_amount: number;
-  }) => {
-    const newBooking: Booking = {
-      id: 'book-' + Math.random().toString(36).substring(2, 9),
-      user_id: profile?.id || 'guest-user',
-      package_id: bookingData.package_id,
-      travel_date: bookingData.travel_date,
-      travelers: bookingData.travelers,
-      total_amount: bookingData.total_amount,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    const handleUpdate = () => {
+      fetchBookings();
     };
 
-    if (isSupabaseConfigured && profile?.id) {
-      try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .insert({
-            user_id: profile.id,
-            package_id: bookingData.package_id,
-            travel_date: bookingData.travel_date,
-            travelers: bookingData.travelers,
-            total_amount: bookingData.total_amount,
-            status: 'pending',
-          })
-          .select('*, package:travel_packages(*)')
-          .single();
+    window.addEventListener(BOOKINGS_UPDATED_EVENT, handleUpdate);
+    return () => {
+      window.removeEventListener(BOOKINGS_UPDATED_EVENT, handleUpdate);
+    };
+  }, [fetchBookings]);
 
-        if (!error && data) {
-          newBooking.id = data.id;
-        }
-      } catch (e) {
-        console.warn('[useBookings] Remote booking insert error:', e);
-      }
+  const createBooking = async (input: CreateBookingInput): Promise<Booking> => {
+    try {
+      const newBooking = await createBookingApi(input);
+      // Immediately update local state
+      setBookings(prev => [newBooking, ...prev.filter(b => b.id !== newBooking.id)]);
+      notifyBookingsUpdated();
+      return newBooking;
+    } catch (err: any) {
+      console.error('[useBookings] createBooking failed:', err);
+      throw err;
     }
-
-    const updated = [newBooking, ...bookings];
-    setBookings(updated);
-    localStorage.setItem('voyage_bookings', JSON.stringify(updated));
-    return newBooking;
   };
 
-  const updateBookingStatus = async (bookingId: string, newStatus: BookingStatus) => {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('bookings')
-          .update({ status: newStatus, updated_at: new Date().toISOString() })
-          .eq('id', bookingId);
-      } catch (e) {
-        console.warn('[useBookings] Remote update error:', e);
+  const updateBookingStatus = async (bookingId: string, status: BookingStatus): Promise<Booking | null> => {
+    try {
+      const updated = await updateStatusApi(bookingId, status);
+      if (updated) {
+        setBookings(prev => prev.map(b => (b.id === bookingId ? updated : b)));
+        notifyBookingsUpdated();
       }
+      return updated;
+    } catch (err: any) {
+      console.error('[useBookings] updateBookingStatus failed:', err);
+      throw err;
     }
+  };
 
-    const updated = bookings.map(b => (b.id === bookingId ? { ...b, status: newStatus } : b));
-    setBookings(updated);
-    localStorage.setItem('voyage_bookings', JSON.stringify(updated));
+  const cancelBooking = async (bookingId: string): Promise<Booking | null> => {
+    return updateBookingStatus(bookingId, 'cancelled');
   };
 
   return {
     bookings,
     loading,
+    error,
     createBooking,
     updateBookingStatus,
+    cancelBooking,
+    refreshBookings: fetchBookings,
   };
 }

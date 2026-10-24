@@ -47,6 +47,7 @@ export interface TravelPackage {
   inclusions: string[];
   exclusions: string[];
   availability: string[];
+  image_url?: string;
   is_published: boolean;
   created_at: string;
   updated_at: string;
@@ -91,15 +92,29 @@ export interface Favorite {
 
 export interface Booking {
   id: string;
-  user_id: string;
-  package_id: string;
+  user_id?: string;
+  firebase_uid?: string;
+  package_id?: string | null;
+  destination_id?: string | null;
+  destination_name?: string;
+  destination_image?: string | null;
+  destination_location?: string | null;
   travel_date: string;
+  booking_date?: string;
   travelers: number;
+  guests?: number;
   total_amount: number;
+  total_price?: number;
   status: BookingStatus;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  special_requests?: string | null;
+  tier?: string | null;
+  pnr_code?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
   package?: TravelPackage;
+  destination?: Destination;
   profile?: Profile;
 }
 

@@ -9,6 +9,7 @@ import {
   ArrowRight, 
   Clock, 
   ShieldCheck, 
+  Shield,
   Compass,
   CheckCircle2
 } from 'lucide-react';
@@ -64,6 +65,13 @@ export const UserDashboardPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {profile?.role === 'admin' && (
+            <Link to="/admin">
+              <Button variant="gold" size="md" icon={<Shield className="w-4 h-4" />}>
+                Admin Control Panel
+              </Button>
+            </Link>
+          )}
           <Link to="/planner">
             <Button variant="primary" size="md" icon={<Calendar className="w-4 h-4" />}>
               Create New Trip
@@ -238,13 +246,23 @@ export const UserDashboardPage: React.FC = () => {
       {/* Tab 4: Bookings */}
       {currentTab === 'bookings' && (
         <div className="space-y-6">
-          <h3 className="font-display font-bold text-xl text-white">Logged Reservations & Requests</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display font-bold text-xl text-white">Logged Reservations & Dispatches</h3>
+              <p className="text-xs text-surface-400">All booked destinations synced with your Supabase passport.</p>
+            </div>
+            <Link to="/bookings">
+              <Button variant="primary" size="sm" icon={<ArrowRight className="w-3.5 h-3.5" />}>
+                Open Dedicated My Trips
+              </Button>
+            </Link>
+          </div>
 
           {bookings.length === 0 ? (
             <div className="rounded-3xl glass-panel p-12 text-center text-surface-400 space-y-3">
               <p>No active package reservations found.</p>
-              <Link to="/packages">
-                <Button variant="primary" size="sm">Browse Curated Packages</Button>
+              <Link to="/explore">
+                <Button variant="primary" size="sm">Explore Sanctuaries</Button>
               </Link>
             </div>
           ) : (
@@ -254,16 +272,17 @@ export const UserDashboardPage: React.FC = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                        b.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        b.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                       }`}>
                         {b.status.toUpperCase()}
                       </span>
                       <h4 className="font-display font-bold text-base text-white">
-                        {b.package?.title || 'Signature Journey'}
+                        {b.destination_name || b.package?.title || 'Signature Journey'}
                       </h4>
                     </div>
                     <p className="text-xs text-surface-400">
-                      Departure Date: {b.travel_date ? formatDate(b.travel_date) : 'Scheduled'} &bull; {b.travelers} Guests
+                      Departure Date: {b.travel_date ? formatDate(b.travel_date) : 'Scheduled'} &bull; {b.guests || b.travelers} Guests
+                      {b.pnr_code && <span> &bull; Ref: <span className="font-mono text-primary font-bold">{b.pnr_code}</span></span>}
                     </p>
                   </div>
 
@@ -271,9 +290,15 @@ export const UserDashboardPage: React.FC = () => {
                     <div className="text-right">
                       <span className="text-[10px] text-surface-400 uppercase block">Investment</span>
                       <span className="font-display font-bold text-lg text-white">
-                        {formatCurrency(b.total_amount)}
+                        {formatCurrency(b.total_price || b.total_amount)}
                       </span>
                     </div>
+
+                    <Link to="/bookings">
+                      <Button variant="outline" size="sm">
+                        View Pass
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               ))}

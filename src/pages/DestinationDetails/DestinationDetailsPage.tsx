@@ -34,6 +34,7 @@ export const DestinationDetailsPage: React.FC = () => {
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedBookingPkg, setSelectedBookingPkg] = useState<TravelPackage | null>(null);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   if (loading) {
@@ -113,9 +114,12 @@ export const DestinationDetailsPage: React.FC = () => {
           <img
             src={gallery[activeImageIndex] || destination.hero_image}
             alt={destination.name}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
+            }}
             className="w-full h-full object-cover transition-all duration-700"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent pointer-events-none" />
 
           {/* Floating Details Overlay */}
           <div className="absolute bottom-6 sm:bottom-10 left-6 sm:left-10 right-6 sm:right-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -136,10 +140,18 @@ export const DestinationDetailsPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                variant="gold" 
+                size="md" 
+                icon={<Sparkles className="w-4 h-4" />}
+                onClick={() => setIsBookingModalOpen(true)}
+              >
+                Book Now
+              </Button>
               <Link to={`/planner?destination=${destination.id}`}>
-                <Button variant="primary" size="md" icon={<Compass className="w-4 h-4" />}>
-                  Plan Itinerary Here
+                <Button variant="outline" size="md" icon={<Compass className="w-4 h-4" />}>
+                  Plan Itinerary
                 </Button>
               </Link>
             </div>
@@ -157,7 +169,14 @@ export const DestinationDetailsPage: React.FC = () => {
                   activeImageIndex === idx ? 'border-primary scale-105 shadow-glow-primary' : 'border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
-                <img src={img} alt="Thumbnail" className="w-full h-full object-cover" />
+                <img 
+                  src={img} 
+                  alt="Thumbnail" 
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80';
+                  }}
+                  className="w-full h-full object-cover" 
+                />
               </button>
             ))}
           </div>
@@ -240,9 +259,18 @@ export const DestinationDetailsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-2 pt-2">
-              <Link to={`/planner?destination=${destination.id}`}>
-                <Button variant="primary" size="lg" className="w-full">
+            <div className="space-y-3 pt-2">
+              <Button 
+                variant="primary" 
+                size="lg" 
+                className="w-full shadow-glow-primary"
+                icon={<Sparkles className="w-4 h-4 text-gold" />}
+                onClick={() => setIsBookingModalOpen(true)}
+              >
+                Book Now
+              </Button>
+              <Link to={`/planner?destination=${destination.id}`} className="block">
+                <Button variant="outline" size="md" className="w-full">
                   Create Custom Itinerary
                 </Button>
               </Link>
@@ -299,8 +327,12 @@ export const DestinationDetailsPage: React.FC = () => {
       {/* Booking Modal */}
       <BookingModal
         travelPackage={selectedBookingPkg}
-        isOpen={Boolean(selectedBookingPkg)}
-        onClose={() => setSelectedBookingPkg(null)}
+        destination={selectedBookingPkg ? undefined : destination}
+        isOpen={Boolean(selectedBookingPkg) || isBookingModalOpen}
+        onClose={() => {
+          setSelectedBookingPkg(null);
+          setIsBookingModalOpen(false);
+        }}
       />
 
     </div>

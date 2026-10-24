@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requireAdmin = false }) => {
-  const { profile, isAdmin, loading, simulateAdminMode } = useAuth();
+  const { profile, isAdmin, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -21,10 +21,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
     );
   }
 
-  if (!profile) {
-    return <Navigate to="/auth/signin" state={{ from: location }} replace />;
-  }
-
   if (requireAdmin && !isAdmin) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4 py-16">
@@ -33,40 +29,48 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
             <Shield className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h2 className="font-display font-bold text-2xl text-white">Privileged Access Required</h2>
+            <h2 className="font-display font-bold text-2xl text-white">Administrator Access Only</h2>
             <p className="text-xs text-surface-400 leading-relaxed">
-              This area is restricted to verified administrators. Your active session (<strong>{profile.email}</strong>) has the <code>traveler</code> role.
+              {profile ? (
+                <>
+                  Access restricted to the verified platform administrator (<strong className="text-gold">pranaykrsingh03@gmail.com</strong>). Your active session (<strong className="text-white">{profile.email}</strong>) is not authorized.
+                </>
+              ) : (
+                <>
+                  The Voyage Operations Console requires administrator credentials (<strong className="text-gold">pranaykrsingh03@gmail.com</strong>). Please sign in to proceed.
+                </>
+              )}
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white/[0.03] border border-border-subtle text-left space-y-3">
-            <span className="text-[11px] font-bold text-gold uppercase tracking-wider block">
-              Tester / Dev Simulation
-            </span>
-            <p className="text-xs text-surface-400">
-              For local evaluation and demonstration, you can activate administrative clearance:
-            </p>
-            <Button
-              variant="gold"
-              size="sm"
-              onClick={() => simulateAdminMode(true)}
-              className="w-full"
-            >
-              Simulate Admin Clearance
-            </Button>
-          </div>
-
-          <div className="pt-2">
-            <Link to="/dashboard">
-              <Button variant="outline" size="sm" className="w-full">
+          <div className="pt-2 flex flex-col gap-2.5">
+            {!profile ? (
+              <Link to="/auth/signin" state={{ from: location }}>
+                <Button variant="primary" size="md" className="w-full">
+                  Sign In as Administrator
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/auth/signin" state={{ from: location }}>
+                <Button variant="outline" size="md" className="w-full">
+                  Sign In with Different Account
+                </Button>
+              </Link>
+            )}
+            <Link to={profile ? "/dashboard" : "/"}>
+              <Button variant="ghost" size="sm" className="w-full">
                 <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
-                Return to Traveler Dashboard
+                {profile ? 'Return to Traveler Dashboard' : 'Return to Home'}
               </Button>
             </Link>
           </div>
         </div>
       </div>
     );
+  }
+
+  if (!profile) {
+    return <Navigate to="/auth/signin" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;

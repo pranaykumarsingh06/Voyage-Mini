@@ -16,11 +16,17 @@ export function formatCurrency(amount: number | null | undefined, currency: stri
 
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return '';
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(dateString));
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    return dateString || '';
+  }
 }
 
 export function truncateText(text: string, maxLength: number): string {

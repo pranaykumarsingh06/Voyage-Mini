@@ -6,7 +6,7 @@ const env = typeof import.meta !== 'undefined' ? (import.meta.env || {}) : {};
 
 const supabaseUrl = env.VITE_SUPABASE_URL ||
   (typeof process !== 'undefined' && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL)) ||
-  'https://ntoayhpdqpvaylndeyyx.supabase.co';
+  '';
 
 const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY ||
   (typeof process !== 'undefined' && (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)) ||
@@ -15,7 +15,9 @@ const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY ||
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
-  supabaseAnonKey.trim() !== ''
+  supabaseAnonKey.trim() !== '' &&
+  !supabaseUrl.includes('your-project-id') &&
+  !supabaseAnonKey.includes('your_supabase')
 );
 
 /**

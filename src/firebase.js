@@ -23,17 +23,20 @@ const getEnvVar = (key) => {
 
 const firebaseConfig = {
   apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || '',
-  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || 'final-voyage.firebaseapp.com',
-  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || 'final-voyage',
-  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || 'final-voyage.firebasestorage.app',
-  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || '485893142380',
-  appId: getEnvVar('VITE_FIREBASE_APP_ID') || '1:485893142380:web:11ef7213752f4c7608e549'
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || '',
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || '',
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || '',
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || '',
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || ''
 };
 
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && 
   firebaseConfig.apiKey.trim() !== '' &&
-  !firebaseConfig.apiKey.includes('your-firebase')
+  !firebaseConfig.apiKey.includes('your_firebase') &&
+  !firebaseConfig.apiKey.includes('your-firebase') &&
+  firebaseConfig.projectId &&
+  !firebaseConfig.projectId.includes('your_firebase')
 );
 
 export const firebaseApp = isFirebaseConfigured

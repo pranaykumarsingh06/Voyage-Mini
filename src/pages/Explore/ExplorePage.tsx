@@ -1,20 +1,24 @@
 import React, { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, SlidersHorizontal, Grid, List, Sparkles, X } from 'lucide-react';
+import { Search, Filter, SlidersHorizontal, Grid, List, Sparkles, X, Globe2 } from 'lucide-react';
 import { useDestinations } from '../../hooks/useDestinations';
 import { DestinationCard } from '../../components/destinations/DestinationCard';
-import { DestinationCategory } from '../../types/database';
+import { BookingModal } from '../../components/packages/BookingModal';
+import { Destination, DestinationCategory } from '../../types/database';
 import { Button } from '../../components/common/Button';
 
 export const ExplorePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { destinations, loading, error } = useDestinations();
 
+  // Booking Modal State
+  const [selectedBookingDest, setSelectedBookingDest] = useState<Destination | null>(null);
+
   // Search & Filter state initialized from query params
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
   const [selectedCategory, setSelectedCategory] = useState<string>(searchParams.get('category') || 'all');
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
-  const [maxBudget, setMaxBudget] = useState<number>(6000);
+  const [maxBudget, setMaxBudget] = useState<number>(7000);
   const [sortBy, setSortBy] = useState<'rating' | 'budget-asc' | 'budget-desc' | 'name'>('rating');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -24,29 +28,31 @@ export const ExplorePage: React.FC = () => {
     return list.sort();
   }, [destinations]);
 
-  // Categories list
-  const categories: (DestinationCategory | 'all')[] = [
-    'all',
-    'Luxury',
-    'Cultural',
-    'Beaches',
-    'Mountains',
-    'Wildlife',
-    'Adventure',
+  // Unified Categories with Alpine & Coastal Friendly Labels
+  const categoryFilters = [
+    { id: 'all', label: 'All Sanctuaries' },
+    { id: 'Mountains', label: 'Alpine' },
+    { id: 'Beaches', label: 'Coastal' },
+    { id: 'Cultural', label: 'Cultural' },
+    { id: 'Adventure', label: 'Adventure' },
+    { id: 'Luxury', label: 'Luxury' },
+    { id: 'Wildlife', label: 'Wildlife' }
   ];
 
   // Filtered & sorted destinations
   const filteredDestinations = useMemo(() => {
     return destinations
       .filter((dest) => {
+        const query = searchTerm.trim().toLowerCase();
         const matchesSearch =
-          !searchTerm ||
-          dest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          dest.country.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          dest.description.toLowerCase().includes(searchTerm.toLowerCase());
+          !query ||
+          dest.name.toLowerCase().includes(query) ||
+          dest.country.toLowerCase().includes(query) ||
+          dest.description.toLowerCase().includes(query) ||
+          dest.category.toLowerCase().includes(query);
 
         const matchesCategory =
-          selectedCategory === 'all' || dest.category === selectedCategory;
+          selectedCategory === 'all' || dest.category.toLowerCase() === selectedCategory.toLowerCase();
 
         const matchesCountry =
           selectedCountry === 'all' || dest.country === selectedCountry;
@@ -69,7 +75,7 @@ export const ExplorePage: React.FC = () => {
     setSearchTerm('');
     setSelectedCategory('all');
     setSelectedCountry('all');
-    setMaxBudget(6000);
+    setMaxBudget(7000);
     setSortBy('rating');
     setSearchParams({});
   };
@@ -81,45 +87,45 @@ export const ExplorePage: React.FC = () => {
       <div className="space-y-3">
         <span className="text-xs uppercase font-extrabold tracking-widest text-primary flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-gold" />
-          The Global Portfolio
+          The Global Portfolio &bull; 12 Destinations
         </span>
         <h1 className="font-display font-black text-3xl sm:text-5xl text-white">
           Discover Sanctuaries
         </h1>
-        <p className="text-xs sm:text-sm text-surface-400 max-w-xl">
+        <p className="text-xs sm:text-sm text-surface-300 max-w-xl">
           Filter through our private atlas of curated architectural villas, alpine retreats, and coastal havens.
         </p>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="rounded-3xl glass-panel p-6 border border-border-subtle space-y-6">
+      {/* Filter Toolbar with Modern Dark Glassmorphism */}
+      <div className="rounded-3xl glass-panel p-6 border border-white/15 space-y-6 shadow-2xl">
         
-        {/* Top Search & Category Pills */}
+        {/* Top Search & Display Controls */}
         <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
           
-          {/* Keyword Search */}
+          {/* Real-time Keyword Search */}
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-surface-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-primary absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search by city, country, or sanctuary name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white/[0.04] border border-border-subtle rounded-2xl pl-11 pr-4 py-2.5 text-sm text-white placeholder:text-surface-400 focus:outline-none focus:border-primary transition-colors"
+              className="w-full glass-input rounded-2xl pl-11 pr-10 py-2.5 text-sm text-white placeholder:text-surface-400 font-medium"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-white"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-white p-1"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          {/* View mode & Sort */}
+          {/* View Mode & Sort Dropdowns */}
           <div className="flex items-center gap-3 justify-between sm:justify-end">
-            <div className="flex items-center gap-2 bg-white/[0.03] px-3 py-2 rounded-2xl border border-border-subtle text-xs">
+            <div className="flex items-center gap-2 bg-white/[0.04] px-3.5 py-2 rounded-2xl border border-white/10 text-xs">
               <span className="text-surface-400">Sort:</span>
               <select
                 value={sortBy}
@@ -133,11 +139,11 @@ export const ExplorePage: React.FC = () => {
               </select>
             </div>
 
-            <div className="flex items-center gap-1 bg-white/[0.03] p-1 rounded-2xl border border-border-subtle">
+            <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-2xl border border-white/10">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-xl text-xs transition-colors ${
-                  viewMode === 'grid' ? 'bg-primary text-white' : 'text-surface-400 hover:text-white'
+                  viewMode === 'grid' ? 'bg-primary text-white shadow-glow-primary' : 'text-surface-400 hover:text-white'
                 }`}
                 title="Grid View"
               >
@@ -146,7 +152,7 @@ export const ExplorePage: React.FC = () => {
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-xl text-xs transition-colors ${
-                  viewMode === 'list' ? 'bg-primary text-white' : 'text-surface-400 hover:text-white'
+                  viewMode === 'list' ? 'bg-primary text-white shadow-glow-primary' : 'text-surface-400 hover:text-white'
                 }`}
                 title="List View"
               >
@@ -157,37 +163,41 @@ export const ExplorePage: React.FC = () => {
 
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-border-subtle">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                selectedCategory === cat
-                  ? 'bg-gradient-to-r from-primary to-coral text-white shadow-glow-primary scale-102'
-                  : 'bg-white/[0.03] text-surface-300 hover:bg-white/[0.08] hover:text-white border border-border-subtle'
-              }`}
-            >
-              {cat === 'all' ? 'All Experiences' : cat}
-            </button>
-          ))}
+        {/* Category Filter Pills with Active Glow State */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10 items-center">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-surface-400 mr-2 flex items-center gap-1">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-gold" /> Filter Style:
+          </span>
+          {categoryFilters.map((cat) => {
+            const isActive = selectedCategory.toLowerCase() === cat.id.toLowerCase();
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                  isActive ? 'glass-pill-active scale-105' : 'glass-pill'
+                }`}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Detailed Controls: Country & Budget Slider */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-4 border-t border-border-subtle items-center">
+        {/* Country & Budget Slider Controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-4 border-t border-white/10 items-center">
           
           {/* Country Selector */}
           <div>
-            <label className="block text-xs font-semibold text-surface-400 uppercase tracking-wider mb-1.5">
-              Country
+            <label className="block text-xs font-bold text-surface-300 uppercase tracking-wider mb-1.5">
+              Select Country
             </label>
             <select
               value={selectedCountry}
               onChange={(e) => setSelectedCountry(e.target.value)}
-              className="w-full bg-background-secondary border border-border-subtle rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-primary"
+              className="w-full glass-input bg-background-secondary rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-primary cursor-pointer"
             >
-              <option value="all">All Countries</option>
+              <option value="all">All Countries ({countries.length} Available)</option>
               {countries.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -196,9 +206,9 @@ export const ExplorePage: React.FC = () => {
 
           {/* Budget Slider */}
           <div>
-            <div className="flex justify-between items-center text-xs font-semibold text-surface-400 uppercase tracking-wider mb-1.5">
+            <div className="flex justify-between items-center text-xs font-bold text-surface-300 uppercase tracking-wider mb-1.5">
               <span>Max Budget</span>
-              <span className="text-white font-bold">${maxBudget.toLocaleString()}</span>
+              <span className="text-gold font-display font-extrabold text-sm">${maxBudget.toLocaleString()}</span>
             </div>
             <input
               type="range"
@@ -211,11 +221,11 @@ export const ExplorePage: React.FC = () => {
             />
           </div>
 
-          {/* Reset button */}
+          {/* Reset Filters shortcut */}
           <div className="flex sm:justify-end items-end h-full pt-4 sm:pt-0">
             <button
               onClick={handleResetFilters}
-              className="text-xs text-surface-400 hover:text-primary underline flex items-center gap-1.5"
+              className="text-xs text-surface-400 hover:text-primary underline flex items-center gap-1.5 transition-colors font-medium"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               Reset All Filters
@@ -226,25 +236,25 @@ export const ExplorePage: React.FC = () => {
 
       </div>
 
-      {/* Results Count */}
+      {/* Results Header */}
       <div className="flex items-center justify-between text-xs text-surface-400">
-        <span>Showing {filteredDestinations.length} sanctuaries</span>
+        <span>Showing <strong className="text-white">{filteredDestinations.length}</strong> of {destinations.length} sanctuaries</span>
       </div>
 
-      {/* Destinations Grid / List */}
+      {/* Destinations Grid / List with Dark Glassmorphism */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-96 rounded-3xl bg-white/[0.03] animate-pulse" />
+            <div key={i} className="h-96 rounded-3xl bg-white/[0.04] animate-pulse border border-white/10" />
           ))}
         </div>
       ) : filteredDestinations.length === 0 ? (
-        <div className="rounded-3xl glass-panel p-12 text-center space-y-4 max-w-lg mx-auto">
-          <div className="w-16 h-16 rounded-full bg-white/[0.05] border border-border-subtle flex items-center justify-center text-surface-400 mx-auto">
-            <Filter className="w-8 h-8 opacity-60" />
+        <div className="rounded-3xl glass-panel p-12 text-center space-y-4 max-w-lg mx-auto border border-white/15">
+          <div className="w-16 h-16 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-surface-400 mx-auto">
+            <Filter className="w-8 h-8 opacity-60 text-primary" />
           </div>
           <h3 className="font-display font-bold text-xl text-white">No Sanctuaries Found</h3>
-          <p className="text-xs text-surface-400 leading-relaxed">
+          <p className="text-xs text-surface-300 leading-relaxed">
             We could not find any destinations matching your criteria. Try adjusting your search term, country, or budget slider.
           </p>
           <Button variant="outline" size="sm" onClick={handleResetFilters}>
@@ -254,10 +264,21 @@ export const ExplorePage: React.FC = () => {
       ) : (
         <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-6'}>
           {filteredDestinations.map((dest) => (
-            <DestinationCard key={dest.id} destination={dest} />
+            <DestinationCard 
+              key={dest.id} 
+              destination={dest} 
+              onQuickBook={(d) => setSelectedBookingDest(d)}
+            />
           ))}
         </div>
       )}
+
+      {/* Interactive Booking Modal */}
+      <BookingModal
+        destination={selectedBookingDest}
+        isOpen={Boolean(selectedBookingDest)}
+        onClose={() => setSelectedBookingDest(null)}
+      />
 
     </div>
   );

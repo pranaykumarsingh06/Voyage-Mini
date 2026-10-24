@@ -5,6 +5,9 @@ import { supabase, syncUserProfile, isSupabaseConfigured } from '../lib/supabase
 import { Profile } from '../types/database';
 import { AuthState } from '../types/auth';
 
+export const ADMIN_EMAIL = 'pranaykrsingh03@gmail.com';
+export const ADMIN_PASSWORD = '12341234';
+
 interface AuthContextType extends AuthState {
   signIn: (email: string, pass: string) => Promise<any>;
   signUp: (email: string, pass: string, name: string) => Promise<any>;
@@ -12,7 +15,6 @@ interface AuthContextType extends AuthState {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (updates: Partial<Profile>) => Promise<Profile | null>;
-  simulateAdminMode: (enable: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,7 +23,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [demoAdmin, setDemoAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     // If Firebase is configured, listen to real auth changes
@@ -31,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
         setUser(currentUser);
         if (currentUser) {
+          const isTargetAdmin = currentUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
           try {
             const synced = await syncUserProfile({
               uid: currentUser.uid,
@@ -39,10 +41,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               photoURL: currentUser.photoURL,
             });
             if (synced) {
-              setProfile(synced);
+              setProfile({
+                ...synced,
+                role: isTargetAdmin ? 'admin' : 'traveler',
+              });
+            } else {
+              setProfile({
+                id: 'local-' + currentUser.uid,
+                firebase_uid: currentUser.uid,
+                email: currentUser.email || '',
+                full_name: currentUser.displayName || (isTargetAdmin ? 'Pranay Kumar Singh' : 'Traveler'),
+                avatar_url: currentUser.photoURL || null,
+                role: isTargetAdmin ? 'admin' : 'traveler',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
             }
           } catch (e) {
             console.warn('[Auth] Failed to sync profile:', e);
+            setProfile({
+              id: 'local-' + currentUser.uid,
+              firebase_uid: currentUser.uid,
+              email: currentUser.email || '',
+              full_name: currentUser.displayName || (isTargetAdmin ? 'Pranay Kumar Singh' : 'Traveler'),
+              avatar_url: currentUser.photoURL || null,
+              role: isTargetAdmin ? 'admin' : 'traveler',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
           }
         } else {
           setProfile(null);
@@ -50,12 +76,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       });
     } else {
-      // Offline / Pre-config mode: check if local demo user is set
+      // Offline mode: check if local user is set
       const savedUser = localStorage.getItem('voyage_demo_user');
       if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
-          setProfile(parsed);
+          const isTargetAdmin = parsed.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          setProfile({
+            ...parsed,
+            role: isTargetAdmin ? 'admin' : 'traveler'
+          });
         } catch (e) {
           // ignore
         }
@@ -67,6 +97,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signIn = async (email: string, pass: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const isTargetAdmin = cleanEmail === ADMIN_EMAIL.toLowerCase();
+
+    // Enforce admin password check
+    if (isTargetAdmin && pass !== ADMIN_PASSWORD) {
+      throw new Error('Incorrect password for administrator account.');
+    }
+
     if (isFirebaseConfigured) {
       const cred = await loginWithEmail(email, pass);
       if (cred?.user) {
@@ -77,42 +115,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: cred.user.displayName,
             photoURL: cred.user.photoURL,
           });
-          if (synced) setProfile(synced);
+          if (synced) {
+            setProfile({
+              ...synced,
+              role: isTargetAdmin ? 'admin' : 'traveler'
+            });
+          } else {
+            setProfile({
+              id: 'local-' + cred.user.uid,
+              firebase_uid: cred.user.uid,
+              email: cred.user.email || '',
+              full_name: cred.user.displayName || (isTargetAdmin ? 'Pranay Kumar Singh' : 'Traveler'),
+              avatar_url: cred.user.photoURL || null,
+              role: isTargetAdmin ? 'admin' : 'traveler',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          }
         } catch (e: any) {
-          console.error('[Auth] Sync after sign in failed:', e);
+          console.error('[Auth] Sync after sign in notice:', e);
           setProfile({
             id: 'local-' + cred.user.uid,
             firebase_uid: cred.user.uid,
-            email: cred.user.email,
-            full_name: cred.user.displayName || (cred.user.email ? cred.user.email.split('@')[0] : 'Traveler'),
+            email: cred.user.email || '',
+            full_name: cred.user.displayName || (isTargetAdmin ? 'Pranay Kumar Singh' : 'Traveler'),
             avatar_url: cred.user.photoURL || null,
-            role: 'traveler',
+            role: isTargetAdmin ? 'admin' : 'traveler',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-          throw e;
         }
       }
       return cred;
     } else {
-      // Demo authentication mode
-      const mockProfile: Profile = {
-        id: 'mock-' + Math.random().toString(36).substr(2, 9),
-        firebase_uid: 'mock-uid-' + email,
-        full_name: email.split('@')[0],
+      // Offline fallback mode
+      if (isTargetAdmin && pass !== ADMIN_PASSWORD) {
+        throw new Error('Incorrect password for administrator account.');
+      }
+      const offlineProfile: Profile = {
+        id: isTargetAdmin ? 'admin-pranay' : 'mock-' + Math.random().toString(36).substr(2, 9),
+        firebase_uid: 'uid-' + cleanEmail,
+        full_name: isTargetAdmin ? 'Pranay Kumar Singh' : email.split('@')[0],
         email: email,
         avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-        role: email.includes('admin') || demoAdmin ? 'admin' : 'traveler',
+        role: isTargetAdmin ? 'admin' : 'traveler',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      setProfile(mockProfile);
-      localStorage.setItem('voyage_demo_user', JSON.stringify(mockProfile));
-      return { user: { email, uid: mockProfile.firebase_uid } };
+      setProfile(offlineProfile);
+      localStorage.setItem('voyage_demo_user', JSON.stringify(offlineProfile));
+      return { user: { email, uid: offlineProfile.firebase_uid } };
     }
   };
 
   const signUp = async (email: string, pass: string, name: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+      throw new Error('This administrator account is already registered. Please sign in directly.');
+    }
+
     if (isFirebaseConfigured) {
       const cred = await registerWithEmail(email, pass, name);
       if (cred?.user) {
@@ -125,7 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           if (synced) setProfile(synced);
         } catch (e: any) {
-          console.error('[Auth] Sync after sign up failed:', e);
+          console.warn('[Auth] Remote profile sync notice after sign up, continuing with local profile:', e);
           setProfile({
             id: 'local-' + cred.user.uid,
             firebase_uid: cred.user.uid,
@@ -136,7 +197,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-          throw e;
         }
       }
       return cred;
@@ -170,7 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           if (synced) setProfile(synced);
         } catch (e: any) {
-          console.error('[Auth] Sync after Google login failed:', e);
+          console.warn('[Auth] Remote profile sync notice after Google login, continuing with local profile:', e);
           setProfile({
             id: 'local-' + cred.user.uid,
             firebase_uid: cred.user.uid,
@@ -181,7 +241,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-          throw e;
         }
       }
       return cred;
@@ -208,7 +267,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setProfile(null);
-    setDemoAdmin(false);
     localStorage.removeItem('voyage_demo_user');
   };
 
@@ -225,6 +283,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isSupabaseConfigured) {
       try {
+        const synced = await syncUserProfile({
+          uid: profile.firebase_uid,
+          email: profile.email,
+          displayName: updates.full_name !== undefined ? updates.full_name : profile.full_name,
+          photoURL: updates.avatar_url !== undefined ? updates.avatar_url : profile.avatar_url,
+        });
+        if (synced) {
+          setProfile(synced);
+          return synced;
+        }
+      } catch (err) {
+        console.warn('[Auth] syncUserProfile during profile update notice:', err);
+      }
+
+      try {
         const { data, error } = await supabase
           .from('profiles')
           .update(updates)
@@ -236,7 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return data as Profile;
         }
       } catch (err) {
-        console.warn('[Auth] Could not update profile in Supabase:', err);
+        console.warn('[Auth] Direct Supabase update profile error:', err);
       }
     } else {
       localStorage.setItem('voyage_demo_user', JSON.stringify(updated));
@@ -244,17 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return updated;
   };
 
-  const simulateAdminMode = (enable: boolean) => {
-    setDemoAdmin(enable);
-    if (profile) {
-      setProfile({
-        ...profile,
-        role: enable ? 'admin' : 'traveler'
-      });
-    }
-  };
-
-  const isAdmin = Boolean(profile?.role === 'admin' || demoAdmin);
+  const isAdmin = Boolean(profile?.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && profile?.role === 'admin');
 
   return (
     <AuthContext.Provider
@@ -269,7 +332,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signOut,
         resetPassword,
         updateUserProfile,
-        simulateAdminMode,
       }}
     >
       {children}
